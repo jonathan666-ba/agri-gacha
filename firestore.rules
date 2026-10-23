@@ -1,0 +1,47 @@
+rules_version = '2';
+
+// あぐり大学ガチャのデータベースのルール。
+// Firebase の画面の「Firestore Database」→「ルール」に、このファイルの中身を貼って「公開」する。
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+    function isAdmin() {
+      return signedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    // 各プレイヤーの記録。ログインした仲間なら誰でも見られる。書けるのは本人だけで、名前は変えられない
+    match /players/{uid} {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.auth.uid == uid
+        && request.resource.data.name is string && request.resource.data.name.size() <= 12;
+      allow update: if signedIn() && request.auth.uid == uid
+        && request.resource.data.name == resource.data.name;
+    }
+
+    // 名前の持ち主。ログイン前に「この名前は使われているか」を見るので、誰でも読める。
+    // 作るだけで、書き換えも削除もできない(同じ名前を2人が使えないようにする)
+    match /names/{key} {
+      allow read: if true;
+      allow create: if signedIn() && request.resource.data.uid == request.auth.uid;
+    }
+
+    // キーワード・What's New・オススメリンク。誰でも読めて、書けるのは管理者だけ
+    match /site/{doc} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // 管理者の印。Firebase の画面から手で作る。本人だけが「自分は管理者か」を読める
+    match /admins/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid;
+    }
+
+    // 使い終わった復活の呪文(段階6で使う)。作るだけで、書き換えも削除もできない
+    match /spells/{id} {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.uid == request.auth.uid;
+    }
+  }
+}

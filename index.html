@@ -2,18 +2,1375 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>あぐり大学ガチャ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Zen+Kaku+Gothic+New:wght@400;700&family=DotGothic16&display=swap">
 <style>
-  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #120e22; color: #efeaff; font-family: "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif; text-align: center; padding: 16px; box-sizing: border-box; }
-  h1 { font-size: clamp(24px, 6vw, 36px); margin: 0 0 12px; }
-  p { margin: 0; color: #a69dc8; }
+/* Layout: one stage (machine + reveal) on top, collection binder below. Single night-sky world to match the card art. */
+:root {
+  --night: #120e22;
+  --night-2: #1d1834;
+  --panel: #251f40;
+  --line: #3b3360;
+  --ink: #efeaff;
+  --muted: #a69dc8;
+  --n: #9fd9c4;
+  --r: #8fb8ff;
+  --sr: #e88cff;
+  --ssr: #ffd36b;
+  --accent: #ff6f9c;
+  --paper: #ffffff;
+  --display: "Dela Gothic One", "Hiragino Kaku Gothic StdN", "Yu Gothic", sans-serif;
+  --body: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif;
+  --mono: "DotGothic16", ui-monospace, monospace;
+  color-scheme: dark;
+}
+[hidden] { display: none !important; }
+img { max-width: 100%; }
+body { margin: 0; }
+html, body { min-height: 100%; }
+body {
+  background: radial-gradient(120% 70% at 50% 0%, #2c2252 0%, var(--night) 60%) fixed, var(--night);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 15px;
+  line-height: 1.6;
+}
+.wrap {
+  max-width: 980px;
+  margin: 0 auto;
+  padding-block: 24px 64px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid;
+  gap: 40px;
+}
+#stars { position: fixed; inset: 0; z-index: -1; pointer-events: none; width: 100%; height: 100%; }
+
+header { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px; }
+h1 { font-family: var(--display); font-weight: 400; font-size: clamp(28px, 6vw, 44px); line-height: 1.1; margin: 0; letter-spacing: .02em; text-wrap: balance; }
+h1 small { display: block; font-family: var(--mono); font-size: 13px; color: var(--muted); letter-spacing: .2em; margin-bottom: 6px; }
+.stats { display: flex; gap: 18px; font-family: var(--mono); font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.stats .draws b { color: var(--ssr); }
+.stats b { display: block; font-family: var(--display); font-weight: 400; font-size: 22px; color: var(--ink); }
+
+/* Stage */
+.stage { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 32px; align-items: center; }
+@media (max-width: 720px) { .stage { grid-template-columns: 1fr; } }
+.slot { position: relative; display: grid; place-items: center; padding-block: 12px; }
+.halo { position: absolute; width: 90%; aspect-ratio: 1; max-width: 100%; border-radius: 50%; background: radial-gradient(closest-side, rgba(255,255,255,.12), transparent); transition: background .6s; }
+.slot[data-rarity="R"] .halo { background: radial-gradient(closest-side, rgba(143,184,255,.35), transparent); }
+.slot[data-rarity="SR"] .halo { background: radial-gradient(closest-side, rgba(232,140,255,.45), transparent); }
+.slot[data-rarity="SSR"] .halo { background: radial-gradient(closest-side, rgba(255,211,107,.6), transparent); animation: pulse 1.6s ease-in-out infinite; }
+@keyframes pulse { 50% { transform: scale(1.12); opacity: .7; } }
+
+.card3d { position: relative; width: min(280px, 72vw); aspect-ratio: 256 / 395; max-width: 100%; perspective: 1200px; }
+.flipper { position: absolute; inset: 0; transform-style: preserve-3d; transition: transform .9s cubic-bezier(.3,1.4,.5,1); }
+.card3d.open .flipper { transform: rotateY(180deg); }
+.face { position: absolute; inset: 0; backface-visibility: hidden; border-radius: 14px; overflow: hidden; box-shadow: 0 18px 40px rgba(0,0,0,.55); }
+.face img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.face.front { transform: rotateY(180deg); }
+.card3d.shake .flipper { animation: shake .7s ease-in-out; }
+@keyframes shake { 0%,100% { transform: rotate(0) } 20% { transform: rotate(-4deg) translateY(-6px) } 40% { transform: rotate(4deg) } 60% { transform: rotate(-3deg) translateY(-4px) } 80% { transform: rotate(2deg) } }
+.card3d.open[data-rarity="SSR"] .face.front { box-shadow: 0 0 0 3px var(--ssr), 0 0 50px rgba(255,211,107,.7); }
+.card3d.open[data-rarity="SR"] .face.front { box-shadow: 0 0 0 3px var(--sr), 0 0 36px rgba(232,140,255,.55); }
+.card3d.open[data-rarity="R"] .face.front { box-shadow: 0 0 0 2px var(--r), 0 0 24px rgba(143,184,255,.4); }
+
+.panel { display: grid; gap: 18px; min-width: 0; }
+.status { font-family: var(--mono); font-size: 13px; letter-spacing: .15em; color: var(--muted); }
+.result-name { font-family: var(--display); font-weight: 400; font-size: clamp(24px, 5vw, 34px); line-height: 1.2; margin: 0; text-wrap: balance; }
+.result-text { margin: 0; color: var(--muted); max-width: 32em; }
+.badge { display: inline-block; font-family: var(--display); font-weight: 400; font-size: 13px; padding: 2px 10px; border-radius: 999px; border: 1.5px solid currentColor; letter-spacing: .08em; }
+.badge.N { color: var(--n); } .badge.R { color: var(--r); } .badge.SR { color: var(--sr); } .badge.SSR { color: var(--ssr); }
+.new { font-family: var(--display); font-weight: 400; color: var(--accent); font-size: 13px; margin-left: 8px; }
+
+.pull {
+  font-family: var(--display); font-weight: 400; font-size: 20px; letter-spacing: .06em;
+  color: #2a1530; background: linear-gradient(180deg, #ffd9e6, var(--accent));
+  border: 0; border-radius: 999px; padding: 16px 28px; cursor: pointer;
+  box-shadow: 0 6px 0 #a63a62, 0 12px 30px rgba(255,111,156,.35);
+  transition: transform .1s, box-shadow .1s, filter .2s;
+  justify-self: start;
+}
+.pull:hover:not(:disabled) { filter: brightness(1.06); }
+.pull:active:not(:disabled) { transform: translateY(4px); box-shadow: 0 2px 0 #a63a62, 0 6px 16px rgba(255,111,156,.3); }
+.pull:focus-visible { outline: 3px solid var(--ink); outline-offset: 4px; }
+.btns { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
+.pull.alt { color: #2e2208; background: linear-gradient(180deg, #fff1c4, var(--ssr)); box-shadow: 0 6px 0 #9c7a22, 0 12px 30px rgba(255,211,107,.3); }
+.pull.alt:active:not(:disabled) { box-shadow: 0 2px 0 #9c7a22, 0 6px 16px rgba(255,211,107,.25); }
+.pull .left { font-size: 15px; opacity: .8; }
+.pull:disabled { cursor: default; color: var(--muted); background: var(--panel); box-shadow: inset 0 0 0 1.5px var(--line); }
+.countdown { font-family: var(--mono); font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.countdown b { color: var(--ink); font-weight: 400; font-size: 18px; letter-spacing: .05em; }
+
+.rates { display: flex; flex-wrap: wrap; gap: 14px; font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.rates span { font-variant-numeric: tabular-nums; }
+.rates .N { color: var(--n); } .rates .R { color: var(--r); } .rates .SR { color: var(--sr); } .rates .SSR { color: var(--ssr); }
+
+/* Binder */
+.binder h2 { font-family: var(--display); font-weight: 400; font-size: 22px; margin: 0 0 4px; }
+.binder p { margin: 0 0 18px; color: var(--muted); font-size: 13px; }
+#binderBody { display: grid; gap: 36px; }
+.series-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px; margin-bottom: 14px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+.series-head h3 { font-family: var(--display); font-weight: 400; font-size: 18px; margin: 0; }
+.series-head .cnt { font-size: 13px; }
+.ticket { display: grid; gap: 8px; padding-top: 16px; border-top: 1px solid var(--line); }
+.ticket label { font-family: var(--mono); font-size: 12px; letter-spacing: .15em; color: var(--muted); }
+.ticket-row { display: flex; gap: 8px; }
+.ticket input { flex: 1; min-width: 0; background: var(--night-2); color: var(--ink); border: 1.5px solid var(--line); border-radius: 10px; padding: 10px 12px; font: inherit; }
+.ticket input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.ticket button { font-family: var(--display); font-weight: 400; font-size: 15px; background: var(--panel); color: var(--ink); border: 1.5px solid var(--accent); border-radius: 10px; padding: 0 18px; cursor: pointer; }
+.ticket button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.ticket button:disabled { opacity: .5; cursor: default; }
+.ticket-msg { font-size: 13px; color: var(--muted); margin: 0; min-height: 1.6em; }
+.ticket-msg.err { color: var(--accent); }
+/* 古いブラウザ向け: aspect-ratio / inset が使えないときの代わり */
+@supports not (aspect-ratio: 1 / 1) {
+  .card3d::before { content: ""; display: block; padding-top: 154.3%; }
+  .cover-disc { height: auto; }
+}
+@supports not (inset: 0) {
+  .flipper, .face, .zoom, .book, .cover, .flash, #stars { top: 0; right: 0; bottom: 0; left: 0; }
+}
+.err-line { color: var(--accent); font-family: var(--mono); word-break: break-all; }
+.ticket-msg.ok { color: var(--ink); }
+.via { font-size: 11px; color: var(--accent); border: 1px solid currentColor; border-radius: 4px; padding: 0 5px; }
+
+.shelf { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 16px; }
+.spine { display: flex; gap: 14px; align-items: center; text-align: left; background: var(--panel); color: var(--ink); border: 1.5px solid var(--line); border-radius: 14px; padding: 12px; cursor: pointer; font: inherit; transition: border-color .2s, transform .2s; }
+.spine:hover { border-color: var(--accent); transform: translateY(-2px); }
+.spine:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
+.spine img { width: 64px; aspect-ratio: 256 / 395; object-fit: cover; border-radius: 6px; flex: none; }
+.spine .series-head { flex-direction: column; align-items: flex-start; gap: 6px; border: 0; margin: 0; padding: 0; min-width: 0; }
+.spine .go { margin-left: auto; color: var(--muted); font-family: var(--display); font-size: 22px; }
+
+.book { position: fixed; inset: 0; z-index: 18; background: var(--night); overflow-y: auto; padding-block: max(20px, env(safe-area-inset-top, 0px)) max(40px, env(safe-area-inset-bottom, 0px)); padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.book-inner { max-width: 980px; margin: 0 auto; display: grid; gap: 14px; }
+.book-head { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.book-head h2 { font-family: var(--display); font-weight: 400; font-size: 22px; margin: 0; }
+.back-btn { font: inherit; font-size: 14px; color: var(--ink); background: var(--panel); border: 1.5px solid var(--line); border-radius: 999px; padding: 6px 14px; cursor: pointer; }
+.back-btn:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+
+.cover { position: fixed; inset: 0; z-index: 30; background: radial-gradient(90% 60% at 50% 40%, #2c2252 0%, var(--night) 70%), var(--night); display: grid; place-items: center; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); transition: opacity .5s; }
+.cover.leave { opacity: 0; pointer-events: none; }
+.cover-inner { display: grid; gap: 22px; justify-items: center; text-align: center; }
+.cover-disc { width: min(300px, 72vw); max-width: 100%; padding: 24px; background: radial-gradient(closest-side, rgba(255,211,107,.22), transparent); animation: rise .9s cubic-bezier(.2,1.2,.4,1) both; }
+.cover-disc img { width: 100%; display: block; }
+.cover-title { margin: 0; font-family: var(--display); font-weight: 400; font-size: clamp(28px, 8vw, 40px); letter-spacing: .04em; line-height: 1.2; }
+h1 { display: flex; align-items: center; gap: 14px; }
+.hlogo { width: clamp(56px, 12vw, 72px); height: auto; flex: none; }
+.cover-sub { margin: 0; font-family: var(--mono); font-size: 13px; letter-spacing: .3em; color: var(--muted); }
+.cover .pull { justify-self: center; }
+/* 表紙のログイン: 名前と合言葉 */
+.cover { overflow-y: auto; }
+.cover-inner { padding-block: 24px; }
+.login { display: grid; gap: 14px; justify-items: center; width: min(320px, 100%); }
+.login label { display: grid; gap: 4px; width: 100%; text-align: left; font-family: var(--mono); font-size: 12px; letter-spacing: .15em; color: var(--muted); }
+.login input { background: var(--night-2); color: var(--ink); border: 1.5px solid var(--line); border-radius: 10px; padding: 10px 12px; font: inherit; font-size: 16px; letter-spacing: normal; }
+.login input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.login-msg { margin: 0; font-size: 13px; color: var(--muted); max-width: 24em; }
+.login-msg.err { color: var(--accent); }
+.login-hello { margin: 0; font-size: 16px; }
+.login-hello b { font-family: var(--display); font-weight: 400; font-size: 20px; }
+.who { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+.who .note { margin: 0; }
+@keyframes rise { from { transform: translateY(16px) scale(.94); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .cover-disc { animation: none; } }
+.sealed { font-family: var(--display); font-weight: 400; font-size: 12px; color: var(--muted); border: 1.5px dashed var(--line); padding: 1px 10px; border-radius: 999px; letter-spacing: .08em; }
+.complete { font-family: var(--display); font-weight: 400; font-size: 12px; color: var(--night); background: var(--ssr); padding: 2px 10px; border-radius: 999px; letter-spacing: .08em; }
+.grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 640px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.cell { position: relative; border: 0; padding: 0; background: none; cursor: pointer; border-radius: 10px; color: inherit; font: inherit; text-align: left; }
+.cell:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
+.cell img { width: 100%; aspect-ratio: 256 / 395; object-fit: cover; display: block; border-radius: 10px; transition: transform .2s; }
+.cell:hover img { transform: translateY(-3px); }
+.cell.locked { cursor: default; }
+.cell.locked img { filter: brightness(.35); }
+.cell.locked:hover img { transform: none; }
+.cell .q { position: absolute; inset: 0 0 auto; aspect-ratio: 256 / 395; display: grid; place-items: center; font-family: var(--display); font-size: 40px; color: rgba(255,255,255,.45); }
+.cell .meta { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; font-size: 13px; gap: 6px; }
+.cell .meta .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.cnt { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--muted); }
+
+.log { font-family: var(--mono); font-size: 13px; color: var(--muted); display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.log li { display: flex; gap: 12px; font-variant-numeric: tabular-nums; }
+.note { font-size: 12px; color: var(--muted); }
+
+/* Zoom */
+.zoom { position: fixed; inset: 0; z-index: 20; background: rgba(8,6,18,.85); display: grid; place-items: center; padding: 24px; }
+.zoom img { width: min(360px, 86vw); border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,.6); }
+
+.flash { position: fixed; inset: 0; z-index: 15; pointer-events: none; background: #fff; opacity: 0; }
+.flash.go { animation: flash .7s ease-out; }
+@keyframes flash { 0% { opacity: .85 } 100% { opacity: 0 } }
+
+/* レア度ごとの演出: R は少し派手、SR は派手、SSR はゲキアツ */
+.flash.white { background: #fff; } .flash.blue { background: #8fb8ff; } .flash.purple { background: #e88cff; } .flash.gold { background: #ffd36b; }
+.slot { z-index: 5; }
+.card3d { isolation: isolate; }
+.card3d.instant .flipper { transition: none; }
+.aura { position: absolute; inset: -32%; border-radius: 50%; z-index: -1; pointer-events: none; opacity: 0; background: radial-gradient(closest-side, var(--ac, transparent), transparent); transition: opacity .4s; }
+.card3d.charging .aura { opacity: 1; animation: aura .5s ease-in-out infinite alternate; }
+@keyframes aura { to { transform: scale(1.15); } }
+.card3d.charge .flipper { animation: shake .7s ease-in-out infinite; }
+.card3d.charge.hard .flipper { animation-duration: .2s; }
+.blackout { position: fixed; inset: 0; z-index: 4; background: #000; opacity: 0; pointer-events: none; transition: opacity .3s; }
+.blackout.on { opacity: .93; }
+.rays { position: fixed; left: 50%; top: 40%; width: 160vmax; height: 160vmax; margin: -80vmax 0 0 -80vmax; z-index: -1; pointer-events: none; opacity: 0; transition: opacity 1s; animation: spin 18s linear infinite; }
+.rays.on { opacity: 1; }
+.rays.SR { background: repeating-conic-gradient(from 0deg, rgba(232,140,255,.2) 0deg 8deg, transparent 8deg 22deg); }
+.rays.SSR { background: repeating-conic-gradient(from 0deg, rgba(255,211,107,.4) 0deg 6deg, transparent 6deg 13deg, rgba(255,156,194,.3) 13deg 18deg, transparent 18deg 26deg); animation-duration: 5s; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.stage.quake { animation: quake .6s; }
+@keyframes quake { 10%, 50%, 90% { transform: translate(-10px, 4px) rotate(-1deg); } 30%, 70% { transform: translate(10px, -4px) rotate(1deg); } }
+.card3d.open[data-rarity="SSR"] .face.front { animation: ssrglow 1s ease-in-out infinite alternate; }
+@keyframes ssrglow { from { box-shadow: 0 0 0 3px #ffd36b, 0 0 50px rgba(255,211,107,.8); } to { box-shadow: 0 0 0 4px #ff9cc2, 0 0 90px rgba(255,156,194,.9), 0 0 140px rgba(255,211,107,.6); } }
+.burst { position: absolute; left: 50%; top: 50%; width: 0; height: 0; pointer-events: none; z-index: 5; }
+.burst i { position: absolute; width: var(--s); height: var(--s); margin: calc(var(--s) / -2); border-radius: 50%; background: var(--c); box-shadow: 0 0 10px var(--c); animation: pt 1.2s cubic-bezier(.1,.8,.3,1) both; }
+@keyframes pt { from { transform: translate(0, 0) scale(1); opacity: 1; } to { transform: translate(var(--x), var(--y)) scale(.2); opacity: 0; } }
+.stamp { position: absolute; left: 50%; top: -7%; z-index: 6; transform: translateX(-50%); font-family: var(--display); font-weight: 400; font-size: 44px; line-height: 1; white-space: nowrap; pointer-events: none; animation: stamp .5s cubic-bezier(.2,1.5,.4,1) both; }
+.stamp.R { color: #8fb8ff; font-size: 32px; text-shadow: 0 0 16px rgba(143,184,255,.8); }
+.stamp.SR { color: #e88cff; text-shadow: 0 0 22px rgba(232,140,255,.9); }
+.stamp.SSR { color: #ffd36b; font-size: 56px; text-shadow: 0 0 10px #fff, 0 0 30px rgba(255,211,107,1), 0 0 60px rgba(255,156,194,.9); }
+@keyframes stamp { from { transform: translateX(-50%) scale(3); opacity: 0; } to { transform: translateX(-50%) scale(1); opacity: 1; } }
+.face.front img { transition: filter 1.5s ease; }
+.card3d.veiled .face.front img { filter: blur(16px) brightness(.35) saturate(.4); transition: none; }
+.card3d.unveil .face.front::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(105deg, transparent 35%, rgba(255,255,255,.75) 50%, transparent 65%); background-size: 250% 100%; animation: sheen 1.4s ease-out forwards; }
+@keyframes sheen { from { background-position: 150% 0; } to { background-position: -100% 0; } }
+.card3d.afterglow .aura { opacity: .9; animation: aura 1.1s ease-in-out infinite alternate; }
+.card3d.promo .flipper { animation: promo 1.18s cubic-bezier(.45,0,.2,1); }
+@keyframes promo { 0% { transform: rotateY(180deg) scale(1); } 50% { transform: rotateY(720deg) scale(1.14); filter: brightness(1.8); } 100% { transform: rotateY(1260deg) scale(1); } }
+.ring { position: absolute; left: 50%; top: 50%; width: 24px; height: 24px; margin: -12px; border-radius: 50%; border: 3px solid var(--c); box-shadow: 0 0 12px var(--c); z-index: 4; pointer-events: none; animation: ring .9s ease-out forwards; }
+@keyframes ring { from { transform: scale(1); opacity: 1; } to { transform: scale(22); opacity: 0; } }
+.rain { position: fixed; inset: 0; z-index: 6; pointer-events: none; overflow: hidden; }
+.rain i { position: absolute; top: -20px; width: 8px; height: 14px; background: var(--c); border-radius: 2px; animation: fall var(--d) linear both; }
+@keyframes fall { to { transform: translateY(110vh) rotate(var(--r)); } }
+.result-name.rr-R .nm { text-shadow: 0 0 14px rgba(143,184,255,.7); }
+.result-name.rr-SR .nm { text-shadow: 0 0 18px rgba(232,140,255,.9); animation: srname 1.2s ease-in-out infinite alternate; }
+@keyframes srname { to { text-shadow: 0 0 28px rgba(232,140,255,1), 0 0 6px #fff; } }
+.result-name.rr-SSR .nm { background: linear-gradient(90deg, #ffd36b, #ff9cc2, #9fd0ff, #ffd36b); background-size: 300% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: shimmer 2.2s linear infinite; }
+@keyframes shimmer { to { background-position: 300% 0; } }
+.login-note { margin: 0; font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.toast { position: fixed; left: 50%; top: calc(16px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); z-index: 30; width: max-content; max-width: calc(100% - 32px); background: linear-gradient(180deg, #fff1c4, var(--ssr)); color: #2e2208; font-family: var(--display); font-weight: 400; font-size: 16px; padding: 12px 20px; border-radius: 14px; box-shadow: 0 10px 30px rgba(0,0,0,.45); text-align: center; animation: toastin .5s cubic-bezier(.2,1.4,.4,1); }
+@keyframes toastin { from { transform: translate(-50%, -30px); opacity: 0; } }
+.reset-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-top: 18px; }
+.reset-row .note { margin: 0; }
+.reset-btn { font: inherit; font-size: 13px; color: var(--muted); background: none; border: 1.5px solid var(--line); border-radius: 999px; padding: 6px 14px; cursor: pointer; }
+.reset-btn:hover { border-color: var(--accent); color: var(--ink); }
+.reset-btn:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+.reset-btn.armed { color: #2a1530; background: var(--accent); border-color: var(--accent); font-weight: 700; }
+/* What's New: タイトルの下を1行で横に流れるお知らせ */
+.news { display: flex; align-items: center; gap: 12px; margin-top: -24px; background: var(--night-2); border: 1.5px solid var(--line); border-radius: 999px; padding: 6px 14px 6px 6px; min-width: 0; }
+.news-tag { flex: none; font-family: var(--display); font-weight: 400; font-size: 12px; letter-spacing: .06em; color: #2a1530; background: var(--accent); border-radius: 999px; padding: 2px 10px; }
+.news-view { flex: 1; min-width: 0; overflow: hidden; -webkit-mask-image: linear-gradient(90deg, transparent, #000 20px, #000 calc(100% - 20px), transparent); mask-image: linear-gradient(90deg, transparent, #000 20px, #000 calc(100% - 20px), transparent); }
+.news-track { display: inline-flex; gap: 56px; white-space: nowrap; padding-left: 100%; font-size: 14px; animation: ticker var(--dur, 20s) linear infinite; }
+.news-track span::before { content: "◆ "; color: var(--ssr); }
+.news-view:hover .news-track { animation-play-state: paused; }
+@keyframes ticker { to { transform: translateX(-100%); } }
+/* オススメリンク */
+.link-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); gap: 16px; }
+.link-card { display: flex; align-items: center; gap: 12px; background: var(--panel); color: var(--ink); border: 1.5px solid var(--line); border-left: 6px solid var(--lc, var(--line)); border-radius: 14px; padding: 14px 16px; text-decoration: none; transition: border-color .2s, transform .2s; min-width: 0; }
+.link-card:hover { border-color: var(--lc, var(--accent)); transform: translateY(-2px); }
+.link-card .tag { justify-self: start; font-family: var(--display); font-weight: 400; font-size: 11px; letter-spacing: .06em; color: var(--night); background: var(--lc, var(--muted)); border-radius: 999px; padding: 1px 9px; }
+.link-card:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
+.link-card .lt { display: grid; gap: 2px; min-width: 0; }
+.link-card .t { font-family: var(--display); font-weight: 400; font-size: 16px; line-height: 1.35; }
+.link-card .d { font-size: 12px; color: var(--muted); }
+.link-card .go { margin-left: auto; color: var(--muted); font-family: var(--display); font-size: 22px; }
+.foot { display: flex; justify-content: flex-end; margin-top: -16px; }
+/* 管理者メニュー */
+.adm { display: grid; gap: 10px; padding-top: 16px; border-top: 1px solid var(--line); }
+.adm h3 { font-family: var(--display); font-weight: 400; font-size: 17px; margin: 0; }
+.adm .note { margin: 0; }
+.adm-rows { display: grid; gap: 8px; }
+.adm-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.adm-row input { flex: 1 1 120px; min-width: 0; background: var(--night-2); color: var(--ink); border: 1.5px solid var(--line); border-radius: 10px; padding: 8px 10px; font: inherit; font-size: 14px; }
+.adm-row input.num { flex: 0 0 84px; }
+.adm-row input.wide { flex-basis: 100%; }
+.adm-row input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.adm-row .unit { font-size: 13px; color: var(--muted); }
+.adm-del { font: inherit; font-size: 13px; color: var(--muted); background: none; border: 1.5px solid var(--line); border-radius: 999px; padding: 4px 12px; cursor: pointer; }
+.adm-del:hover:not(:disabled) { border-color: var(--accent); color: var(--ink); }
+.adm-del:disabled { opacity: .35; cursor: default; }
+.adm-links .adm-row { padding: 10px; border: 1.5px solid var(--line); border-left: 6px solid var(--lc, var(--line)); border-radius: 12px; }
+.adm-row select { flex: 0 0 auto; background: var(--night-2); color: var(--ink); border: 1.5px solid var(--line); border-radius: 10px; padding: 8px 10px; font: inherit; font-size: 14px; }
+.adm-row select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.adm-save { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 18px; padding-top: 16px; border-top: 1px solid var(--line); }
+.adm-save .note { margin: 0; }
+.adm-save .note.err { color: var(--accent); }
+@media (prefers-reduced-motion: reduce) {
+  .news-track { animation: none; padding-left: 0; }
+  .news-view { overflow-x: auto; -webkit-mask-image: none; mask-image: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .face.front img { transition: none; }
+  .card3d.unveil .face.front::after { animation: none; }
+  .card3d.afterglow .aura, .card3d.promo .flipper, .ring, .rain i, .result-name .nm { animation: none !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .aura, .burst i, .stamp, .rays, .stage.quake, .card3d.charge .flipper, .card3d.open[data-rarity="SSR"] .face.front { animation: none !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .flipper { transition: none; }
+  .card3d.shake .flipper, .halo, .flash.go { animation: none !important; }
+}
 </style>
 </head>
 <body>
-  <div>
-    <h1>あぐり大学ガチャ</h1>
-    <p>引っ越しの準備中です。もうしばらくお待ちください。</p>
+
+<canvas id="stars" aria-hidden="true"></canvas>
+<div class="rays" id="rays" aria-hidden="true"></div>
+<div class="blackout" id="blackout" aria-hidden="true"></div>
+<div class="flash" id="flash"></div>
+<div class="toast" id="toast" role="status" hidden></div>
+
+<div class="wrap">
+  <header>
+    <h1><img class="hlogo" src="cards/logo.png" alt=""><span><small>DAILY CARD GACHA</small>あぐり大学ガチャ</span></h1>
+    <div class="stats">
+      <div class="draws"><b id="sDraws">1</b>引ける回数</div>
+      <div><b id="sOwned">0/74</b>図鑑</div>
+      <div><b id="sTotal">0</b>累計</div>
+      <div><b id="sStreak">0</b>連続ログイン</div>
+    </div>
+  </header>
+
+  <div class="news" id="news" role="region" aria-label="What's New">
+    <span class="news-tag">What's New</span>
+    <div class="news-view"><div class="news-track" id="newsTrack"></div></div>
   </div>
+
+  <section class="stage" aria-label="ガチャ">
+    <div class="slot" id="slot">
+      <div class="halo"></div>
+      <div class="card3d" id="card3d">
+        <div class="aura"></div>
+        <div class="flipper">
+          <div class="face back"><img src="cards/back.jpg" alt="カードの裏面"></div>
+          <div class="face front"><img id="frontImg" src="cards/back.jpg" alt=""></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="status" id="status">TODAY'S DRAW</div>
+      <div id="resultBox">
+        <h2 class="result-name">1日1回、カードを1枚</h2>
+        <p class="result-text">ボタンを押すとカードが1枚もらえます。次に引けるのは日付が変わってからです。</p>
+      </div>
+      <div class="btns">
+        <button class="pull" id="pullBtn" type="button">ガチャを引く</button>
+        <button class="pull alt" id="ticketPullBtn" type="button" hidden>チケットで引く <span class="left" id="ticketLeft">×0</span></button>
+      </div>
+      <div class="countdown" id="countdown" hidden>次のガチャまで <b id="cd">--:--:--</b></div>
+      <div class="rates" id="rates" aria-label="排出率">
+      </div>
+      <p class="login-note" id="loginNote"></p>
+      <div class="ticket" id="ticketForm">
+        <label for="codeInput">CARD TICKET ・ カードチケット</label>
+        <div class="ticket-row">
+          <input id="codeInput" type="text" placeholder="キーワードを入力" maxlength="40" autocomplete="off" enterkeyhint="done">
+          <button type="button" id="codeBtn">使う</button>
+        </div>
+        <p class="ticket-msg" id="ticketMsg" aria-live="polite">キーワードを入れるとチケットがもらえます。チケット1枚でカードを1枚引けます。</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="binder">
+    <h2>カード図鑑</h2>
+    <p>シリーズを選ぶと、そのシリーズのカードが表示されます。</p>
+    <div class="shelf" id="shelf"></div>
+    <div class="reset-row">
+      <button class="reset-btn" id="resetBtn" type="button">図鑑をリセット</button>
+      <span class="note" id="resetNote">集めたカード、引いた記録、使ったキーワード、手持ちのチケットを消します。今日のガチャはそのままです。</span>
+    </div>
+  </section>
+
+  <section class="binder">
+    <h2>引いた記録</h2>
+    <ul class="log" id="log"></ul>
+    <p class="note" id="saveNote"></p>
+    <p class="note err-line" id="errLine" hidden></p>
+  </section>
+
+  <section class="binder" id="links">
+    <h2>オススメリンク</h2>
+    <p>新しいタブで開きます。</p>
+    <div class="link-list" id="linkList"></div>
+  </section>
+  <div class="foot who">
+    <span class="note" id="whoNote"></span>
+    <button class="reset-btn" id="logoutBtn" type="button" hidden>ログアウト</button>
+    <button class="reset-btn" id="adminBtn" type="button" hidden>管理者メニュー</button>
+  </div>
+</div>
+
+<div class="book" id="admin" hidden role="dialog" aria-modal="true" aria-labelledby="adminTitle">
+  <div class="book-inner">
+    <div class="book-head">
+      <button class="back-btn" id="adminClose" type="button">← もどる</button>
+      <h2 id="adminTitle">管理者メニュー</h2>
+    </div>
+    <p class="note">「保存する」を押すと、開いている全員の画面にすぐ反映されます。保存せずにもどると、変更は消えます。</p>
+    <section class="adm">
+      <h3>カードチケットのキーワード</h3>
+      <p class="note">ひらがな・カタカナ、全角・半角の違いは区別しません。各キーワードは1人1回まで使えます。</p>
+      <div class="adm-rows" id="admCodes"></div>
+      <div><button class="adm-del" type="button" data-add="codes">＋ キーワードを追加</button></div>
+    </section>
+    <section class="adm">
+      <h3>What's New</h3>
+      <p class="note">タイトルの下に、上から順に1行で流れます。空にするとWhat's Newの帯は表示されません。</p>
+      <div class="adm-rows" id="admNews"></div>
+      <div><button class="adm-del" type="button" data-add="news">＋ お知らせを追加</button></div>
+    </section>
+    <section class="adm adm-links">
+      <h3>オススメリンク</h3>
+      <p class="note">URLは https:// から始まるものだけ使えます。説明は空でもかまいません。種類で色が変わります。↑↓で表示する順番を入れ替えられます。</p>
+      <div class="adm-rows" id="admLinks"></div>
+      <div><button class="adm-del" type="button" data-add="links">＋ リンクを追加</button></div>
+    </section>
+    <div class="adm-save">
+      <button class="pull" id="admSave" type="button">保存する</button>
+      <span class="note" id="admMsg" aria-live="polite"></span>
+    </div>
+  </div>
+</div>
+
+<div class="zoom" id="zoom" hidden><img id="zoomImg" alt=""></div>
+
+<div class="book" id="book" hidden role="dialog" aria-modal="true" aria-labelledby="bookTitle">
+  <div class="book-inner">
+    <div class="book-head">
+      <button class="back-btn" id="bookClose" type="button">← 図鑑にもどる</button>
+      <h2 id="bookTitle"></h2>
+      <span class="cnt" id="bookCount"></span>
+    </div>
+    <p class="note" id="bookNote"></p>
+    <div class="grid" id="bookGrid"></div>
+  </div>
+</div>
+
+<div class="cover" id="cover">
+  <div class="cover-inner">
+    <div class="cover-disc"><img src="cards/logo.png" alt="あぐり大学 HOKUDAI × DOSHIN SCHOOL OF AGRICULTURE"></div>
+    <h2 class="cover-title">あぐり大学ガチャ</h2>
+    <p class="cover-sub">DAILY CARD GACHA</p>
+    <p class="login-msg" id="coverWait">よみこみ中…</p>
+    <div class="login" id="loginForm" hidden>
+      <label>名前<input id="nameInput" type="text" maxlength="12" autocomplete="username" enterkeyhint="next" placeholder="12文字まで"></label>
+      <label>合言葉<input id="passInput" type="password" autocomplete="current-password" enterkeyhint="go" placeholder="6文字以上"></label>
+      <button class="pull" id="loginBtn" type="button">はじめる</button>
+      <button class="pull alt" id="signupBtn" type="button" hidden>この名前で新しくはじめる</button>
+      <p class="login-msg" id="loginMsg" aria-live="polite">はじめての人は、好きな名前と合言葉を決めてください。別の端末でも、同じ名前と合言葉で続きから遊べます。</p>
+    </div>
+    <div class="login" id="welcome" hidden>
+      <p class="login-hello"><b id="welcomeName"></b> さん、おかえりなさい</p>
+      <button class="pull" id="coverGo" type="button">はじめる</button>
+      <button class="reset-btn" id="switchBtn" type="button">別の名前で入る</button>
+    </div>
+  </div>
+</div>
+
+
+<script>
+// 古いブラウザ向けの補い(Safari 13 / Chrome 80 前後でも動くように)
+if (!Element.prototype.replaceChildren) {
+  Element.prototype.replaceChildren = function () { while (this.firstChild) this.removeChild(this.firstChild); this.append.apply(this, arguments); };
+}
+if (!Object.fromEntries) Object.fromEntries = it => { const o = {}; for (const [k, v] of it) o[k] = v; return o; };
+// 不具合が起きたら画面下に表示する(原因を調べるため)
+function showError(msg) {
+  const el = document.getElementById("errLine");
+  if (el) { el.hidden = false; el.textContent = "エラー: " + msg; }
+}
+window.addEventListener("error", e => showError(e.message));
+window.addEventListener("unhandledrejection", e => showError(String(e.reason && e.reason.message || e.reason)));
+const BOXES = ["boxa", "boxb", "boxc", "boxd", "boxe"];
+const boxesSealed = () => !!seriesOf.treasure.hidden;
+const SERIES = [
+  { id: "work",  name: "農作業", back: "back_work2" },
+  { id: "plant", name: "植物", back: "back_plant_v2" },
+  { id: "insect", name: "昆虫", back: "back_insect_v2" },
+  { id: "cow",   name: "牛", back: "back_cow_v2" },
+  { id: "rebun", name: "礼文島", back: "back_plant_v2" },
+  // unlock: (state) => true になったシリーズだけがガチャに入る。条件は未定なので今は常に閉じている
+  // hidden: 封印中。ガチャにも図鑑にも出さない(カードのデータと集めた記録は残す)
+  { id: "treasure", name: "宝箱", back: "back_cow_v2", hidden: true },
+  // 宝箱A〜Eをすべて集めると解放される
+  { id: "skill", name: "特殊スキル", back: "back", unlock: st => !boxesSealed() && BOXES.every(id => st.counts[id]),
+    get hint() { return boxesSealed() ? "解放条件は準備中です" : `宝箱A〜Eをすべて集めると解放されます（あと${BOXES.filter(id => !state.counts[id]).length}種類）`; } },
+];
+const CARDS = [
+  { s: "work",  id: "plough",    name: "耕起1",     en: "Ploughing",           r: "N",   eff: "収量+10・メンタル−20・低温長雨回避C。春ターンのみ使える" },
+  { s: "work",  id: "ridge",     name: "畝立て1",   en: "Raising ridges",      r: "N",   eff: "収量+10・メンタル−20・病虫害回避C。春ターンのみ使える" },
+  { s: "work",  id: "fert",      name: "施肥1",     en: "Fertilization",       r: "N",   eff: "収量+25・メンタル−50" },
+  { s: "work",  id: "water",     name: "水管理1",   en: "Water Management",    r: "N",   eff: "収量+10・メンタル−30・日照り回避C" },
+  { s: "work",  id: "pest",      name: "農薬散布1", en: "Pesticide spraying",  r: "N",   eff: "収量+10・メンタル−30・病虫害回避C" },
+  { s: "work",  id: "mow",       name: "除草1",     en: "Weed control",        r: "N",   eff: "収量+10・メンタル−40・好天時収量+15" },
+  { s: "work",  id: "addfert",   name: "追肥",      en: "Additional Fertilizing", r: "N", eff: "収量+25(施肥と同時使用で+35)・メンタル−50" },
+  { s: "work",  id: "maint",     name: "農機具の整備1", en: "Maintenance",      r: "N",   eff: "メンタル+20" },
+  { s: "work",  id: "early",     name: "早取り1",   en: "Early harvesting",    r: "N",   eff: "収量−50・メンタル+10・資金+基本販売価格×50。夏ターンのみ使える" },
+  { s: "work",  id: "trellis",   name: "仕立て",    en: "Trellising",          r: "N",   eff: "収量+20・メンタル−10・資金−20" },
+  { s: "work",  id: "grading",   name: "選別1",     en: "Grading",             r: "N",   eff: "メンタル−30・販売価格+5%" },
+  { s: "work",  id: "disbud",    name: "芽かき",    en: "Disbudding",          r: "N",   eff: "収量+10・メンタル−20・強風回避C" },
+  // R・SR は青い裏面(b)。番号順に並べる
+  { s: "work",  id: "matsutake", name: "マツタケ",  en: "Matsutake",           r: "R",  b: "back_work2", eff: "収量+5・メンタル+20" },
+  { s: "work",  id: "windnet",   name: "防風ネット", en: "Windproof net",      r: "R",  b: "back_work2", eff: "収量+30・メンタル−20・強風回避B" },
+  { s: "work",  id: "fert2",     name: "施肥2",     en: "Fertilization",       r: "R",  b: "back_work2", eff: "収量+40・メンタル−10" },
+  { s: "work",  id: "grading2",  name: "選別2",     en: "Grading",             r: "R",  b: "back_work2", eff: "メンタル−10・販売価格+10%" },
+  { s: "work",  id: "water2",    name: "水管理2",   en: "Water Management",    r: "R",  b: "back_work2", eff: "収量+15・メンタル−20・日照り回避B" },
+  { s: "work",  id: "pest2",     name: "農薬散布2", en: "Pesticide spraying",  r: "R",  b: "back_work2", eff: "収量+15・メンタル−20・病虫害回避B" },
+  { s: "work",  id: "vinyl",     name: "ビニールハウス", en: "Vinyl house",     r: "R",  b: "back_work2", eff: "収量+30・メンタル−30・低温長雨回避B" },
+  { s: "work",  id: "weed2",     name: "除草2",     en: "Weed control",        r: "R",  b: "back_work2", eff: "収量+15・メンタル−30・好天時収量+20" },
+  { s: "work",  id: "plough2",   name: "耕起2",     en: "Ploughing",           r: "R",  b: "back_work2", eff: "収量+15・メンタル−20・強風回避B。春ターンのみ使える" },
+  { s: "work",  id: "ridge2",    name: "畝立て2",   en: "Raising ridges",      r: "R",  b: "back_work2", eff: "収量+15・メンタル−20・低温長雨回避B。春ターンのみ使える" },
+  { s: "work",  id: "maint2",    name: "農機具の整備2", en: "Maintenance",      r: "R",  b: "back_work2", eff: "メンタル+40" },
+  { s: "work",  id: "mulch",     name: "マルチ",    en: "Mulching",            r: "R",  b: "back_work2", eff: "収量+15・メンタル−20・日照り回避B" },
+  { s: "work",  id: "growth",    name: "生育診断",  en: "Growth monitoring",   r: "SR", b: "back_work2", eff: "収量+20・メンタル+10・病虫害回避B・強風回避B" },
+  { s: "work",  id: "fert3",     name: "施肥3",     en: "Fertilization",       r: "SR", b: "back_work2", eff: "収量+50・メンタル+10" },
+  { s: "work",  id: "combine",   name: "収量コンバイン", en: "Yield monitoring combine", r: "SR", b: "back_work2", eff: "収量+15・好天時収量+20" },
+  { s: "work",  id: "grading3",  name: "選別3",     en: "Grading",             r: "SR", b: "back_work2", eff: "メンタル+10・販売価格+15%" },
+  { s: "work",  id: "pest3",     name: "農薬散布3", en: "Pesticide spraying",  r: "SR", b: "back_work2", eff: "収量+20・メンタル+10・病虫害回避B・低温長雨回避B" },
+  { s: "work",  id: "plough3",   name: "耕起3",     en: "Ploughing",           r: "SR", b: "back_work2", eff: "収量+20・メンタル+10・低温長雨回避B・強風回避B" },
+  { s: "work",  id: "manip",     name: "マニピュレータ", en: "Manipulator",     r: "SR", b: "back_work2", eff: "メンタル+10・資金+基本販売価格×50" },
+  { s: "work",  id: "weed3",     name: "除草3",     en: "Weed control",        r: "SR", b: "back_work2", eff: "収量+20・メンタル+10・好天時収量+25" },
+  { s: "work",  id: "remote",    name: "リモートセンシング", en: "Remote sensing", r: "SR", b: "back_work2", eff: "収量+20・メンタル+10・日照り回避B・低温長雨回避B" },
+  { s: "work",  id: "soil",      name: "土壌診断",  en: "Soil diagnosis",      r: "SR", b: "back_work2", eff: "収量+30・メンタル+10・日照り回避B・病虫害回避B" },
+  { s: "work",  id: "assist",    name: "アシストスーツ", en: "Assist suit",     r: "SR", b: "back_work2", eff: "収量+50・メンタル+10" },
+  { s: "work",  id: "fieldsv",   name: "フィールドサーバ", en: "Field Server",  r: "SR", b: "back_work2", eff: "収量+20・メンタル+10・日照り回避B・強風回避B" },
+  { s: "plant", id: "hinagiku",   name: "ヒナギク",     en: "Hinagiku",      r: "N", eff: "キク科ヒナギク属・生育地：道端や空地" },
+  { s: "plant", id: "oubayuri",   name: "オオウバユリ",   en: "Oubayuri",      r: "N", eff: "ユリ科ウバユリ属・生育地：低地〜低山の林下" },
+  { s: "plant", id: "dokudami",   name: "ドクダミ",     en: "Dokudami",      r: "N", eff: "ドクダミ科ドクダミ属・生育地：人里の周辺、日陰" },
+  { s: "plant", id: "yamagobo",   name: "ヤマゴボウ",   en: "Yamagobo",      r: "N", eff: "ヤマゴボウ科ヤマゴボウ属・生育地：人里に近い路傍" },
+  { s: "plant", id: "hebiichigo", name: "ヤブヘビイチゴ", en: "Yabuhebiichigo", r: "N", eff: "バラ科キジムシロ属・生育地：林縁や林内" },
+  { s: "plant", id: "iwamitsuba", name: "イワミツバ",   en: "Iwamitsuba",    r: "N", eff: "セリ科エゾボウフウ属・生育地：道端や空地" },
+  { s: "plant", id: "kuroyuri",   name: "クロユリ",     en: "Kuroyuri",      r: "R", eff: "ユリ科バイモ属・生育地：湿った草原や林内" },
+  { s: "plant", id: "baikal",     name: "バイカルハナウド", en: "Baikaruhanaudo", r: "R", eff: "セリ科ハナウド属・生育地：道端や河川沿いなど" },
+  { s: "insect", id: "onikuwa",   name: "オニクワガタ",   en: "Onikuwagata",   r: "N", eff: "クワガタムシ科オニクワガタ属・生息地：山地の林など" },
+  { s: "insect", id: "aogomi",    name: "アオゴミムシ",   en: "Aogomimushi",   r: "N", eff: "オサムシ科アオゴミムシ属・生息地：湿った地面" },
+  { s: "insect", id: "gengoro",   name: "ナミゲンゴロウ",  en: "Namigengoro",   r: "N", eff: "ゲンゴロウ科ゲンゴロウ属・生息地：沼や池" },
+  { s: "insect", id: "gifu",      name: "エゾヒメギフチョウ", en: "Ezohimegifucho", r: "N", eff: "アゲハチョウ科ギフチョウ属・生息地：明るい林床" },
+  { s: "insect", id: "maimai",    name: "エゾマイマイカブリ", en: "Ezomaimaikaburi", r: "N", eff: "オサムシ科マイマイカブリ属・生息地：森林" },
+  { s: "insect", id: "senchi",    name: "オオセンチコガネ", en: "Oosenchikogane", r: "N", eff: "センチコガネ科オオセンチコガネ属・生息地：動物のフンのあるところ" },
+  { s: "insect", id: "maruhana",  name: "エゾオオマルハナバチ", en: "Ezoomaruhanabachi", r: "R", eff: "ミツバチ科マルハナバチ属・生息地：平地や山地" },
+  { s: "insect", id: "tonosama",  name: "トノサマバッタ",  en: "Tonosamabatta", r: "R", eff: "バッタ科トノサマバッタ属・生息地：イネ科植物の多い草原" },
+  { s: "cow", id: "holstein",   name: "ホルスタイン",   en: "Holstein",    r: "N", eff: "出生：ホルシュタイン州(ドイツ)。日本で最も多く飼育され、全体の98%を占める。産乳量が多く飼料効率が良い" },
+  { s: "cow", id: "jersey",     name: "ジャージー",     en: "Jersey",      r: "N", eff: "出生：ジャージー島(イギリス)。日本では2番目に多いが1%程度。脂肪分が高く濃厚なミルク" },
+  { s: "cow", id: "brownswiss", name: "ブラウンスイス", en: "Brown Swiss", r: "N", eff: "出生：マサチューセッツ(アメリカ)。乳脂肪・乳蛋白率が高く、チーズの原乳に向く" },
+  { s: "cow", id: "zebu",       name: "ゼブー",         en: "Zebu",        r: "N", eff: "出生：南アジア(インド亜大陸)。背中のコブと長く垂れた耳が特徴。暑さに強い" },
+  { s: "cow", id: "ayrshire",   name: "エアシャー",     en: "Ayrshire",    r: "N", eff: "出生：スコットランド(イギリス)。赤と白の毛色。寿命が長く丈夫で、出産しやすい" },
+  { s: "cow", id: "guernsey",   name: "ガンジー",       en: "Guernsey",    r: "N", eff: "出生：チャネル諸島(イギリス)。風味豊かで栄養価の高い「ゴールデンミルク」を出す" },
+  { s: "rebun", id: "hakusanichige",  name: "ハクサンイチゲ",     en: "Hakusan-ichige",      r: "N", eff: "キンポウゲ科イチリンソウ属・生育地：亜高山帯の湿った草原" },
+  { s: "rebun", id: "atsumorisou",    name: "レブンアツモリソウ", en: "Rebun-Atsumorisou",   r: "R", eff: "ラン科アツモリソウ属・生育地：礼文島沿岸の草原" },
+  { s: "rebun", id: "rebunkozakura",  name: "レブンコザクラ",     en: "Rebun-Kozakura",      r: "N", eff: "サクラソウ科サクラソウ属・生育地：山地の岩場" },
+  { s: "rebun", id: "hakusanchidori", name: "ハクサンチドリ",     en: "Hakusan-Chidori",     r: "N", eff: "ラン科ハクサンチドリ属・生育地：亜高山帯の草地" },
+  { s: "rebun", id: "hanashinobu",    name: "カラフトハナシノブ", en: "Karafuto-Hanashinobu", r: "N", eff: "ハナシノブ科ハナシノブ属・生育地：草原や広葉樹林" },
+  { s: "rebun", id: "kinbaisou",      name: "レブンキンバイソウ", en: "Rebun-Kinbaisou",     r: "N", eff: "キンポウゲ科キンバイソウ属・生育地：亜高山帯の湿った草地" },
+  { s: "rebun", id: "rishiri_a",      name: "利尻富士（飛行機から）", en: "Rishiri-Fuji (A Ver.)", r: "R", eff: "成層火山・標高1721m・N45°10′ E141°15′" },
+  { s: "rebun", id: "rishiri_r",      name: "利尻富士（礼文島から）", en: "Rishiri-Fuji (R Ver.)", r: "R", eff: "成層火山・標高1721m・N45°10′ E141°15′" },
+  // ticket: 引くとチケットがもらえる枚数
+  { s: "treasure", id: "boxa",     name: "宝箱A",     en: "Treasure Box A", r: "N", ticket: 1, eff: "宝箱Aの中身との引換券。何がもらえるかはお楽しみ。引くとチケット+1枚" },
+  { s: "treasure", id: "boxb",     name: "宝箱B",     en: "Treasure Box B", r: "N", ticket: 1, eff: "宝箱Bの中身との引換券。何がもらえるかはお楽しみ。引くとチケット+1枚" },
+  { s: "treasure", id: "boxc",     name: "宝箱C",     en: "Treasure Box C", r: "N", ticket: 1, eff: "宝箱Cの中身との引換券。何がもらえるかはお楽しみ。引くとチケット+1枚" },
+  { s: "treasure", id: "boxd",     name: "宝箱D",     en: "Treasure Box D", r: "N", ticket: 1, eff: "宝箱Dの中身との引換券。何がもらえるかはお楽しみ。引くとチケット+1枚" },
+  { s: "treasure", id: "boxe",     name: "宝箱E",     en: "Treasure Box E", r: "N", ticket: 1, eff: "宝箱Eの中身との引換券。何がもらえるかはお楽しみ。引くとチケット+1枚" },
+  { s: "treasure", id: "hinoki",   name: "ひのきの棒", en: "Cypress stick",  r: "N", eff: "宝箱Fの中身との引換券。何がもらえるかはお楽しみ" },
+  { s: "treasure", id: "chimera",  name: "キメラのつばさ（偽）", en: "The Wings of the Chimera (Fake)", r: "N", eff: "キメラの翼の偽物。一瞬で移動などできない" },
+  { s: "treasure", id: "suteteko", name: "ステテコパンツ", en: "Boxer Shorts", r: "N", eff: "誰かが脱ぎ捨てたパンツ。通気性があって蒸れない" },
+  { s: "treasure", id: "horsedung", name: "うまのふん", en: "Horse Manure",   r: "N", eff: "どこかの馬がみちばたにおとしたふん。ちょっとくさい" },
+  { s: "treasure", id: "greatermimic", name: "人食い箱", en: "Greater Mimic", r: "R", eff: "ミミックが進化したもの。下級の冒険者を一口で喰らう" },
+  { s: "treasure", id: "mimicbaby", name: "ちびミミック", en: "Mimic Baby",   r: "R", eff: "ミミックのこども。ちいさいが、ふたをあけると襲ってくる" },
+  { s: "treasure", id: "emptybox", name: "空の宝箱",   en: "Empty Treasure Box", r: "R", eff: "何も入っていない宝箱。中身は他の冒険者がもちさったようだ" },
+  { s: "treasure", id: "mimic",    name: "ミミック",   en: "Mimic",          r: "R", eff: "宝箱に化けて、開けようとした冒険者を不意打ちで襲う魔物" },
+  { s: "skill", id: "esper",     name: "エスパー", en: "Esper",             r: "SSR", eff: "災害回避+1ランク" },
+  { s: "skill", id: "pureheart", name: "純心",     en: "Pure Heart",        r: "SSR",  eff: "好天時に収量+25" },
+  { s: "skill", id: "farmer",    name: "篤農家",   en: "Exemplary farmer",  r: "SR",  eff: "基本収量+25%" },
+  { s: "skill", id: "tech",      name: "技術力",   en: "Technical skill",   r: "SR",  eff: "春ターンにRカード1枚(ランダム)" },
+  { s: "skill", id: "niggard",   name: "守銭奴",   en: "Niggard",           r: "R",   eff: "春ターンに資金+300・メンタル−50" },
+  { s: "skill", id: "info",      name: "情報力",   en: "Information gatherer", r: "R", eff: "収量+25・販売価格+0.25・春ターンにメンタル+25・資金+50" },
+  { s: "skill", id: "sales",     name: "営業力",   en: "Sales ability",     r: "R",   eff: "販売価格+25%" },
+  { s: "skill", id: "mental",    name: "強メンタル", en: "Mental Toughness", r: "R",   eff: "春ターンにメンタル+200" },
+];
+const RATES = { SSR: 0.05, SR: 0.15, R: 0.30, N: 0.50 };
+const seriesOf = Object.fromEntries(SERIES.map(s => [s.id, s]));
+const isOpen = s => !s.unlock || s.unlock(state);
+
+// サイトの設定(カードチケットのキーワード・What's New・オススメリンク)
+// 管理者メニューで編集すると Firestore の site/config に保存され、全員の画面に反映される。
+// 下の値は、site/config がまだないときや読めないときに使う初期値
+const DEFAULT_SITE = {
+  // キーワード → もらえるチケット枚数。各キーワードは1人1回まで
+  codes: [{ word: "あぐり", tickets: 3 }, { word: "さかいり", tickets: 20 }],
+  news: [
+    "ページの一番下に「オススメリンク」ができました。農家のお仕事ゲーム（暫定版）が遊べます",
+    "連続ログイン3日・7日・30日ごとに、ごほうびのチケットがもらえます",
+  ],
+  links: [
+    { title: "あぐり大学公式フェイスブック", url: "https://www.facebook.com/agriuniv/?locale=ja_JP", desc: "", type: "" },
+    { title: "北大農学部公式X", url: "https://x.com/HokudaiAgr", desc: "", type: "" },
+    { title: "農家のお仕事ゲーム（暫定版）", url: "https://claude.ai/artifact/QQ3zgvHcDgAaxCrrsuJGPa", desc: "", type: "game" },
+  ],
+};
+let site = DEFAULT_SITE;
+let siteRef = null; // Firestore の site/config
+// 全角・半角、カタカナ・ひらがなの違いを吸収する
+const normCode = s => s.normalize("NFKC").trim().toLowerCase().replace(/[ァ-ヶ]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0x60));
+
+// 解放済みシリーズのカードだけで排出率を組み直す(出ないレアリティの分は他に按分)
+function currentRates() {
+  const pool = CARDS.filter(c => isOpen(seriesOf[c.s]));
+  const rars = Object.keys(RATES).filter(r => pool.some(c => c.r === r));
+  const sum = rars.reduce((a, r) => a + RATES[r], 0);
+  return { pool, rates: rars.map(r => [r, RATES[r] / sum]) };
+}
+const byId = Object.fromEntries(CARDS.map(c => [c.id, c]));
+// 封印中のシリーズを、ガチャ・図鑑・枚数の計算から外す(byId と seriesOf には残すので、過去の記録はそのまま表示できる)
+for (let i = CARDS.length - 1; i >= 0; i--) if (seriesOf[CARDS[i].s].hidden) CARDS.splice(i, 1);
+for (let i = SERIES.length - 1; i >= 0; i--) if (SERIES[i].hidden) SERIES.splice(i, 1);
+const $ = id => document.getElementById(id);
+
+let state = { lastDate: null, streak: 0, total: 0, counts: {}, history: [] };
+let loginReady = false; // 記録を読み込み終えるまでログインは数えない
+let busy = false;
+let openSeries = null; // 図鑑で開いているシリーズ
+
+function openBook(id) { openSeries = id; render(); $("book").scrollTop = 0; $("bookClose").focus(); }
+function closeBook() { openSeries = null; render(); }
+
+function today(d = new Date()) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+function yesterday() { const d = new Date(); d.setDate(d.getDate() - 1); return today(d); }
+
+function rollCard() {
+  const { pool, rates } = currentRates();
+  let x = Math.random(), rar = rates[rates.length - 1][0];
+  for (const [r, p] of rates) { if (x < p) { rar = r; break; } x -= p; }
+  const cands = pool.filter(c => c.r === rar);
+  return cands[Math.floor(Math.random() * cands.length)];
+}
+
+/* ---------- Firebase: 名前＋合言葉のアカウントと、Firestore への保存 ----------
+   名前から仮のメールアドレスを作り、合言葉と組にして Firebase Authentication でログインする。
+   記録は players/{uid}、名前の持ち主は names/{名前のキー}、管理者は admins/{uid} に置く */
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyCD54G33F7tXrY7tQkLH_qla_y7wSyAtRY",
+  authDomain: "agri-gacha.firebaseapp.com",
+  projectId: "agri-gacha",
+  storageBucket: "agri-gacha.firebasestorage.app",
+  messagingSenderId: "577995177017",
+  appId: "1:577995177017:web:1f2d891f0013e7257ba1e8",
+};
+const FIREBASE_SDK = "https://www.gstatic.com/firebasejs/12.19.0/";
+let fb = null, auth = null, db = null;
+let me = null; // { uid, name, key }
+let playerRef = null, stopPlayer = null;
+const freshState = () => ({ lastDate: null, streak: 0, total: 0, counts: {}, history: [] });
+
+// 名前のキー: 全角半角・大文字小文字・前後と連続の空白の違いをなくす。同じキーの名前は同じ人
+const nameKey = name => name.normalize("NFKC").trim().replace(/\s+/g, " ").toLowerCase();
+function badName(name) {
+  if (!name) return "名前を入れてください。";
+  if ([...name].length > 12) return "名前は12文字までにしてください。";
+  if (/[\/\\]|[\u0000-\u001f]/.test(name) || /^\.+$/.test(name) || /^__.*__$/.test(name)) return "その名前は使えません。ほかの名前にしてください。";
+  return "";
+}
+// 名前のキーを UTF-8 にして base32(a-z2-7)で書いた、仮のメールアドレス。本物のアドレスではない
+function nameEmail(key) {
+  const abc = "abcdefghijklmnopqrstuvwxyz234567";
+  let bits = "", out = "";
+  for (const b of new TextEncoder().encode(key)) bits += b.toString(2).padStart(8, "0");
+  for (let i = 0; i < bits.length; i += 5) out += abc[parseInt(bits.slice(i, i + 5).padEnd(5, "0"), 2)];
+  return `n-${out}@players.agri-gacha.invalid`;
+}
+
+async function startFirebase() {
+  try {
+    const [app, au, fs] = await Promise.all(["firebase-app.js", "firebase-auth.js", "firebase-firestore.js"].map(f => import(FIREBASE_SDK + f)));
+    fb = { ...au, ...fs };
+    const fa = app.initializeApp(FIREBASE_CONFIG);
+    auth = au.getAuth(fa); db = fs.getFirestore(fa);
+    // 手元で試すときは、Firebase のエミュレータにつなぐ
+    if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
+      au.connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
+      fs.connectFirestoreEmulator(db, "127.0.0.1", 8080);
+    }
+  } catch (e) {
+    $("coverWait").textContent = "読み込みに失敗しました。通信のよいところで、ページを開き直してください。";
+    showError(e && e.message || e);
+    return;
+  }
+  watchSite();
+  fb.onAuthStateChanged(auth, user => { user ? enter(user) : leave(); });
+}
+
+// ログインできたら、その人の記録を読み込む。別の端末で変わったら、こちらにも反映する
+async function enter(user) {
+  try {
+    playerRef = fb.doc(db, "players", user.uid);
+    let snap = await fb.getDoc(playerRef);
+    if (!snap.exists()) {
+      // アカウントを作った直後に止まった場合など。ログイン名から記録を作り直す
+      const name = pendingName || user.displayName || "なまえ";
+      await fb.setDoc(playerRef, { ...freshState(), name, nameKey: nameKey(name), updatedAt: fb.serverTimestamp() });
+      snap = await fb.getDoc(playerRef);
+    }
+    const d = snap.data();
+    me = { uid: user.uid, name: d.name, key: d.nameKey };
+    useRemote(d);
+    stopPlayer = fb.onSnapshot(playerRef, s => {
+      if (s.metadata.hasPendingWrites || !s.exists() || busy) return;
+      useRemote(s.data()); render();
+    }, () => {});
+    fb.getDoc(fb.doc(db, "admins", user.uid)).then(a => { $("adminBtn").hidden = !a.exists(); }, () => {});
+  } catch (e) {
+    showError(e && (e.code || e.message) || e);
+    loginMsg("記録を読み込めませんでした。ページを開き直してください。", "err");
+    showForm();
+    return;
+  }
+  $("whoNote").textContent = `${me.name} さんで遊んでいます`;
+  $("logoutBtn").hidden = false;
+  $("saveNote").textContent = "記録はあなたのアカウント（名前と合言葉）に保存されています。";
+  if (pendingName) { pendingName = null; closeCover(); }
+  else { $("welcomeName").textContent = me.name; showCover("welcome"); }
+  loginReady = true; checkLogin(); render();
+}
+// 読み込んだ記録を state にする(名前と時刻は state に入れない)
+function useRemote(d) {
+  const copy = JSON.parse(JSON.stringify(d));
+  delete copy.name; delete copy.nameKey; delete copy.updatedAt;
+  state = Object.assign(freshState(), copy);
+}
+function leave() {
+  if (stopPlayer) stopPlayer();
+  stopPlayer = null; playerRef = null; me = null; loginReady = false;
+  state = freshState();
+  $("adminBtn").hidden = true; $("logoutBtn").hidden = true; $("whoNote").textContent = "";
+  render();
+  showForm();
+}
+async function save() {
+  if (!playerRef || !me) return;
+  try {
+    await fb.setDoc(playerRef, { ...JSON.parse(JSON.stringify(state)), name: me.name, nameKey: me.key, updatedAt: fb.serverTimestamp() });
+    $("saveNote").textContent = "記録はあなたのアカウント（名前と合言葉）に保存されています。";
+  } catch (e) {
+    $("saveNote").textContent = "記録を保存できませんでした。通信のよいところで、ページを開き直してください。";
+    showError(e && (e.code || e.message) || e);
+  }
+}
+
+/* ---------- 表紙とログイン ---------- */
+let pendingName = null; // ログインやアカウント作りの途中の名前
+function showCover(which) {
+  $("cover").hidden = false; $("cover").classList.remove("leave");
+  $("coverWait").hidden = true;
+  $("loginForm").hidden = which !== "form";
+  $("welcome").hidden = which !== "welcome";
+}
+function closeCover() {
+  $("cover").classList.add("leave");
+  setTimeout(() => { $("cover").hidden = true; }, 500);
+}
+function showForm() {
+  $("signupBtn").hidden = true; $("loginBtn").disabled = false;
+  showCover("form");
+}
+function loginMsg(text, kind = "") { $("loginMsg").textContent = text; $("loginMsg").className = "login-msg " + kind; }
+const AUTH_MSG = {
+  "auth/too-many-requests": "何度も失敗したため、しばらく入れません。少し待ってから試してください。",
+  "auth/network-request-failed": "通信できませんでした。通信のよいところで試してください。",
+  "auth/weak-password": "合言葉は6文字以上にしてください。",
+};
+function readLogin() {
+  const name = $("nameInput").value.normalize("NFKC").trim().replace(/\s+/g, " ");
+  const pass = $("passInput").value;
+  const bad = badName(name) || (pass.length < 6 ? "合言葉は6文字以上にしてください。" : "");
+  if (bad) { loginMsg(bad, "err"); return null; }
+  return { name, pass, key: nameKey(name) };
+}
+async function login() {
+  const f = readLogin();
+  if (!f || !auth) return;
+  $("loginBtn").disabled = true; $("signupBtn").hidden = true;
+  loginMsg("確かめています…");
+  try {
+    pendingName = f.name;
+    await fb.signInWithEmailAndPassword(auth, nameEmail(f.key), f.pass);
+    return; // あとは onAuthStateChanged → enter が続ける
+  } catch (e) {
+    pendingName = null;
+    if (AUTH_MSG[e.code]) { loginMsg(AUTH_MSG[e.code], "err"); $("loginBtn").disabled = false; return; }
+  }
+  // 入れなかった: 名前が使われていれば合言葉の間違い、使われていなければ新しく始めるか聞く
+  try {
+    const owner = await fb.getDoc(fb.doc(db, "names", f.key));
+    if (owner.exists()) loginMsg(`合言葉が違います。「${f.name}」はもう使われている名前です。`, "err");
+    else { loginMsg(`「${f.name}」はまだ使われていない名前です。この名前で新しくはじめますか？ 合言葉は忘れないようにしてください。`); $("signupBtn").hidden = false; }
+  } catch (e) {
+    loginMsg(AUTH_MSG["auth/network-request-failed"], "err");
+  }
+  $("loginBtn").disabled = false;
+}
+async function signup() {
+  const f = readLogin();
+  if (!f || !auth) return;
+  $("loginBtn").disabled = true; $("signupBtn").hidden = true;
+  loginMsg("アカウントを作っています…");
+  try {
+    pendingName = f.name;
+    const cred = await fb.createUserWithEmailAndPassword(auth, nameEmail(f.key), f.pass);
+    await fb.updateProfile(cred.user, { displayName: f.name });
+    await fb.setDoc(fb.doc(db, "names", f.key), { uid: cred.user.uid, name: f.name });
+  } catch (e) {
+    pendingName = null;
+    showError(e && (e.code || e.message) || e);
+    loginMsg(e.code === "auth/email-already-in-use" ? `「${f.name}」はもう使われている名前です。ほかの名前にしてください。` : AUTH_MSG[e.code] || "アカウントを作れませんでした。もう一度試してください。", "err");
+    $("loginBtn").disabled = false;
+  }
+  // 名前を書けたら onAuthStateChanged → enter が記録を作る
+}
+
+/* ---------- render ---------- */
+function render() {
+  const owned = CARDS.filter(c => state.counts[c.id]).length;
+  $("sOwned").textContent = `${owned}/${CARDS.length}`;
+  $("sTotal").textContent = state.total;
+  // 今引ける回数 = 今日のガチャ(未使用なら1) + 手持ちのチケット
+  $("sDraws").textContent = (state.lastDate === today() ? 0 : 1) + (state.tickets || 0);
+  $("sStreak").textContent = state.lastLogin === today() || state.lastLogin === yesterday() ? (state.loginStreak || 0) : 0;
+  const nx = nextBonus(state.lastLogin === today() ? state.loginStreak || 0 : 0);
+  $("loginNote").textContent = `連続ログイン ${state.lastLogin === today() ? state.loginStreak || 0 : 0}日目 ・ 次のごほうび：${nx.day}日目にチケット+${nx.n}`;
+
+  $("shelf").replaceChildren(...SERIES.map(s => {
+    const list = CARDS.filter(c => c.s === s.id);
+    const got = list.filter(c => state.counts[c.id]).length;
+    const sec = document.createElement("button");
+    sec.type = "button";
+    sec.className = "spine";
+    sec.onclick = () => openBook(s.id);
+    const open = isOpen(s);
+    sec.innerHTML = `<img src="cards/${s.back}.jpg" alt=""><div class="series-head"><h3>${s.name}シリーズ</h3><span class="cnt">${got}/${list.length}</span>${got === list.length ? '<span class="complete">COMPLETE</span>' : ""}${open ? "" : '<span class="sealed">未解放</span>'}</div><span class="go" aria-hidden="true">›</span>`;
+    return sec;
+  }));
+
+  $("book").hidden = !openSeries;
+  if (openSeries) {
+    const s = seriesOf[openSeries];
+    const list = CARDS.filter(c => c.s === s.id);
+    const got = list.filter(c => state.counts[c.id]).length;
+    $("bookTitle").textContent = `${s.name}シリーズ`;
+    $("bookCount").textContent = `${got}/${list.length}${got === list.length ? " COMPLETE" : ""}`;
+    $("bookNote").textContent = isOpen(s) ? "手に入れたカードはタップで拡大できます。" : `未解放のシリーズです。${s.hint || ""}`;
+    $("bookGrid").replaceChildren(...list.map(cell));
+  }
+
+  function cell(c) {
+    const n = state.counts[c.id] || 0;
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "cell" + (n ? "" : " locked");
+    b.innerHTML = `<img src="cards/${n ? c.id : (c.b || seriesOf[c.s].back)}.jpg" alt="">${n ? "" : '<div class="q">?</div>'}
+      <div class="meta"><span class="nm">${n ? c.name : "？？？"}</span><span class="badge ${c.r}">${c.r}</span></div>
+      <div class="cnt">${n ? "×" + n : "未入手"}</div>`;
+    b.setAttribute("aria-label", n ? `${c.name} ${c.r} ${n}枚` : `未入手の${c.r}カード`);
+    if (n) b.onclick = () => { $("zoomImg").src = `cards/${c.id}.jpg`; $("zoomImg").alt = c.name; $("zoom").hidden = false; };
+    else b.disabled = true;
+    return b;
+  }
+
+  $("rates").replaceChildren(...currentRates().rates.map(([r, p]) =>
+    Object.assign(document.createElement("span"), { className: r, textContent: `${r} ${+(p * 100).toFixed(1)}%` })));
+
+  const hist = state.history.slice(-10).reverse();
+  $("log").replaceChildren(...(hist.length ? hist.map(h => {
+    const li = document.createElement("li"); const c = byId[h.id];
+    li.innerHTML = `<span>${h.date}</span><span class="badge ${c.r}">${c.r}</span><span>${c.name}</span>${h.via ? '<span class="via">チケット</span>' : ""}`;
+    return li;
+  }) : [Object.assign(document.createElement("li"), { textContent: "まだ1枚も引いていません。" })]));
+
+  const done = state.lastDate === today();
+  $("pullBtn").disabled = done || busy;
+  $("pullBtn").textContent = done ? "本日は引きました" : "ガチャを引く";
+  const tk = state.tickets || 0;
+  $("ticketPullBtn").hidden = tk <= 0;
+  $("ticketPullBtn").disabled = busy;
+  $("ticketLeft").textContent = "×" + tk;
+  $("countdown").hidden = !done;
+  if (done && !busy && state.history.length && !$("card3d").classList.contains("open")) showCard(byId[state.history[state.history.length - 1].id], false, "TODAY'S CARD");
+}
+
+function showCard(c, isNew, label) {
+  $("frontImg").src = `cards/${c.id}.jpg`;
+  $("frontImg").alt = c.name;
+  $("card3d").dataset.rarity = c.r;
+  $("slot").dataset.rarity = c.r;
+  $("card3d").classList.add("open");
+  $("status").textContent = label;
+  $("resultBox").innerHTML = `<h2 class="result-name rr-${c.r}"><span class="badge ${c.r}">${c.r}</span> <span class="nm">${c.name}</span>${isNew ? '<span class="new">NEW!</span>' : ""}</h2>
+    <p class="result-text">${c.eff}<br><span style="font-family:var(--mono);font-size:12px">${seriesOf[c.s].name}シリーズ ・ ${c.en} ・ 所持 ${state.counts[c.id]}枚</span></p>`;
+}
+
+// useTicket: true ならチケットを1枚使って引く(毎日のガチャとは別枠)
+async function pull(useTicket) {
+  if (busy) return;
+  if (useTicket ? !(state.tickets > 0) : state.lastDate === today()) return;
+  busy = true; render();
+  const c = rollCard();
+  const isNew = !state.counts[c.id];
+  if (useTicket) {
+    state.tickets -= 1;
+  } else {
+    state.streak = state.lastDate === yesterday() ? state.streak + 1 : 1;
+    state.lastDate = today();
+  }
+  const skillWasOpen = isOpen(seriesOf.skill);
+  state.total += 1;
+  state.counts[c.id] = (state.counts[c.id] || 0) + 1;
+  if (c.ticket) state.tickets = (state.tickets || 0) + c.ticket;
+  const unlocked = !skillWasOpen && isOpen(seriesOf.skill);
+  state.history.push(useTicket ? { id: c.id, date: today(), via: "ticket" } : { id: c.id, date: today() });
+  state.history = state.history.slice(-60);
+  save();
+
+  const card = $("card3d");
+  // 前のカードの絵が見えないよう、裏返しは一瞬で済ませ、表の絵も先に差し替えておく
+  card.classList.add("instant"); card.classList.remove("open"); void card.offsetWidth; card.classList.remove("instant");
+  card.querySelectorAll(".stamp, .burst, .ring").forEach(e => e.remove());
+  card.classList.remove("afterglow", "promo", "charge", "hard", "charging", "veiled", "unveil");
+  delete card.dataset.rarity; delete $("slot").dataset.rarity;
+  $("frontImg").src = `cards/${c.id}.jpg`;
+  $("status").textContent = "DRAWING…";
+  $("resultBox").innerHTML = '<h2 class="result-name">……</h2>';
+  const say = html => { $("resultBox").innerHTML = `<h2 class="result-name">${html}</h2>`; };
+  await revealCard(card, c, say);
+  await unveil(card, c.r, say);
+  showCard(c, isNew, useTicket ? "TICKET GET!" : "GET!");
+  busy = false; render();
+  const news = [c.ticket && `宝箱からチケット+${c.ticket}枚！`, unlocked && "宝箱A〜Eがそろった！ 特殊スキルシリーズが解放されました"].filter(Boolean);
+  if (news.length) toast(news.join(" "));
+}
+const wait = ms => new Promise(r => setTimeout(r, ms));
+const kick = (el, cls) => { el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); };
+function flash(color) { const f = $("flash"); f.className = "flash " + color; void f.offsetWidth; f.classList.add("go"); }
+// 紙吹雪をカードの中心から飛ばす
+function burst(g, n, colors, dist) {
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const box = document.createElement("div");
+  box.className = "burst";
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2, d = dist * (.5 + Math.random() * .7), it = document.createElement("i");
+    it.style.cssText = `--x:${Math.cos(a) * d}px;--y:${Math.sin(a) * d}px;--c:${colors[i % colors.length]};--s:${4 + Math.random() * 8}px;animation-delay:${Math.random() * .15}s`;
+    box.appendChild(it);
+  }
+  g.appendChild(box);
+  setTimeout(() => box.remove(), 1700);
+}
+const stamp = (g, txt, r) => { const b = document.createElement("b"); b.className = "stamp " + r; b.textContent = txt; g.appendChild(b); };
+// 衝撃波の輪をカードの中心から広げる
+function ring(g, color) {
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const el = document.createElement("span");
+  el.className = "ring"; el.style.setProperty("--c", color);
+  g.appendChild(el);
+  setTimeout(() => el.remove(), 1000);
+}
+// SSR のときは画面全体に紙吹雪を降らせる
+function rain(colors) {
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const box = document.createElement("div");
+  box.className = "rain";
+  for (let i = 0; i < 70; i++) {
+    const it = document.createElement("i");
+    it.style.cssText = `left:${Math.random() * 100}%;--c:${colors[i % colors.length]};--d:${2.4 + Math.random() * 1.8}s;--r:${Math.random() * 720 - 360}deg;animation-delay:${Math.random() * 1.6}s`;
+    box.appendChild(it);
+  }
+  document.body.appendChild(box);
+  setTimeout(() => box.remove(), 6000);
+}
+const TIER = { N: { aura: null, ms: 1300 }, R: { aura: "rgba(143,184,255,.7)", ms: 1700 }, SR: { aura: "rgba(232,140,255,.85)", ms: 2400 } };
+// R・SR はときどき、低いレア度だと思わせて上がる(fake)か、下のカードを一度見せてから回転して変わる(promo)
+function revealPlan(r) {
+  const x = Math.random();
+  if (r === "R") return x < .25 ? { fake: "N" } : x < .45 ? { promo: "N" } : {};
+  if (r === "SR") return x < .2 ? { fake: "N" } : x < .4 ? { fake: "R" } : x < .6 ? { promo: "R" } : {};
+  return {};
+}
+function decoyOf(tier) {
+  const pool = currentRates().pool.filter(x => x.r === tier);
+  const list = pool.length ? pool : CARDS.filter(x => x.r === tier);
+  return list[Math.floor(Math.random() * list.length)];
+}
+// めくった後の演出。どのレア度も、光が残り、輪が広がり、紙吹雪が2回はじける
+async function flourish(g, r) {
+  const t = matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 1;
+  const st = document.querySelector(".stage"), rays = $("rays");
+  g.style.setProperty("--ac", { R: "rgba(143,184,255,.55)", SR: "rgba(232,140,255,.65)", SSR: "rgba(255,211,107,.85)" }[r]);
+  g.classList.add("afterglow");
+  if (r === "R") {
+    flash("blue"); ring(g, "#8fb8ff");
+    burst(g, 22, ["#8fb8ff", "#ffffff"], 170); stamp(g, "R", r);
+    await wait(300 * t);
+    burst(g, 14, ["#8fb8ff", "#cfe0ff"], 240);
+  } else if (r === "SR") {
+    flash("white"); await wait(120 * t); flash("purple");
+    rays.className = "rays on SR"; kick(st, "quake");
+    ring(g, "#e88cff"); burst(g, 32, ["#e88cff", "#ffffff", "#c9a6ff"], 230); stamp(g, "SR!", r);
+    await wait(250 * t); ring(g, "#ffffff");
+    await wait(200 * t); burst(g, 26, ["#e88cff", "#ffd9ff", "#ffffff"], 330);
+  } else if (r === "SSR") {
+    ring(g, "#ffd36b"); burst(g, 50, ["#ffd36b", "#fff3c4", "#ff9cc2", "#9fd0ff", "#ffffff"], 280); stamp(g, "SSR!!", r);
+    rain(["#ffd36b", "#ff9cc2", "#9fd0ff", "#ffffff", "#e88cff"]);
+    await wait(250 * t); ring(g, "#ff9cc2");
+    await wait(200 * t); ring(g, "#ffffff"); burst(g, 40, ["#ffd36b", "#ff9cc2", "#ffffff"], 360);
+    await wait(400 * t); flash("gold"); kick(st, "quake");
+  }
+  setTimeout(() => rays.classList.remove("on"), 4000);
+}
+// ぼかしたカードを少し置いてから、光を走らせてじわっと見せる
+async function unveil(g, r, say) {
+  const t = matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 1;
+  if (!g.classList.contains("veiled")) return;
+  say(`<span class="badge ${r}">${r}</span> ？？？`);
+  await wait((r === "SSR" ? 1700 : r === "SR" ? 1400 : 1100) * t);
+  g.classList.add("unveil"); g.classList.remove("veiled");
+  await wait(1500 * t);
+  g.classList.remove("unveil");
+}
+// カードをめくる演出。SSR は青→紫→暗転→金と光が変わるゲキアツの溜め
+async function revealCard(g, c, say) {
+  const r = c.r, t = matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 1;
+  const st = document.querySelector(".stage"), rays = $("rays"), dark = $("blackout"), front = $("frontImg");
+  const aura = col => { if (col) { g.style.setProperty("--ac", col); g.classList.add("charging"); } else g.classList.remove("charging"); };
+  const charge = async (tier, ms) => { g.classList.add("charge"); aura(TIER[tier].aura); await wait(ms * t); };
+  const calm = () => g.classList.remove("charge", "hard", "charging");
+  // めくってもすぐには見せない: ぼかした状態(veiled)で開き、あとで unveil で見せる
+  const open = (tier, veil = true) => { if (veil) g.classList.add("veiled"); g.dataset.rarity = tier; g.classList.add("open"); };
+  rays.className = "rays";
+  await wait(600 * t);
+  if (r === "SSR") {
+    g.classList.add("charge"); aura("rgba(143,184,255,.75)"); await wait(1500 * t);
+    aura("rgba(232,140,255,.85)"); g.classList.add("hard"); flash("purple"); await wait(1400 * t);
+    dark.classList.add("on"); aura("rgba(255,211,107,1)"); say("……！？"); await wait(2200 * t);
+    kick(st, "quake"); await wait(800 * t);
+    calm();
+    flash("white"); await wait(140 * t); flash("gold");
+    dark.classList.remove("on"); rays.className = "rays on SSR";
+    open(r); kick(st, "quake");
+    return flourish(g, r);
+  }
+  const p = revealPlan(r);
+  if (p.fake) {
+    // 低いレア度の光り方で溜めてから、急に上がる
+    await charge(p.fake, TIER[p.fake].ms);
+    calm(); flash("white"); kick(st, "quake"); say("！？");
+    await wait(600 * t);
+    g.classList.add("hard"); await charge(r, TIER[r].ms * .7);
+    calm(); open(r);
+    return flourish(g, r);
+  }
+  if (p.promo) {
+    // 下のレア度のカードを一度見せてから、回転して本当のカードに変わる
+    const decoy = decoyOf(p.promo);
+    new Image().src = `cards/${c.id}.jpg`;
+    front.src = `cards/${decoy.id}.jpg`;
+    await charge(p.promo, TIER[p.promo].ms);
+    calm(); open(p.promo, false);
+    if (p.promo === "R") { flash("blue"); stamp(g, "R", "R"); }
+    say(`<span class="badge ${decoy.r}">${decoy.r}</span> ${decoy.name}`);
+    await wait(1700 * t);
+    say("……！？");
+    g.classList.add("charge", "hard"); aura(TIER[r].aura);
+    await wait(1100 * t);
+    g.classList.remove("charge", "hard");
+    g.querySelectorAll(".stamp").forEach(e => e.remove());
+    flash("white"); kick(g, "promo");
+    await wait(560 * t);
+    g.classList.add("veiled"); front.src = `cards/${c.id}.jpg`; g.dataset.rarity = r;
+    await wait(620 * t);
+    g.classList.remove("promo", "charging");
+    return flourish(g, r);
+  }
+  await charge(r, TIER[r].ms);
+  calm(); open(r);
+  if (r !== "N") return flourish(g, r);
+}
+
+/* ---------- サイトの設定: What's New・オススメリンク・管理者メニュー ---------- */
+const isUrl = u => /^https?:\/\/\S+$/i.test(u);
+// オススメリンクの種類。種類ごとに色を変える(type が空なら URL から推測する)
+const LINK_TYPES = [
+  { id: "game",  name: "ゲーム",     color: "var(--ssr)" },
+  { id: "video", name: "動画",       color: "var(--accent)" },
+  { id: "sns",   name: "SNS",        color: "var(--r)" },
+  { id: "doc",   name: "資料・記事", color: "var(--n)" },
+  { id: "site",  name: "公式サイト", color: "var(--sr)" },
+  { id: "other", name: "その他",     color: "var(--muted)" },
+];
+function guessType(url) {
+  if (/youtube\.com|youtu\.be|nicovideo\.jp|tiktok\.com/i.test(url)) return "video";
+  if (/\/\/([\w-]+\.)*(x\.com|twitter\.com|instagram\.com|facebook\.com|threads\.net|line\.me)/i.test(url)) return "sns";
+  if (/\.pdf($|[?#])|docs\.google\.com|note\.com/i.test(url)) return "doc";
+  return "other";
+}
+const typeOf = l => LINK_TYPES.find(t => t.id === l.type) || LINK_TYPES.find(t => t.id === guessType(l.url || ""));
+// 共有データは誰でも書ける前提で扱い、形と中身を確かめてから使う
+function cleanSite(d) {
+  const str = (v, n) => typeof v === "string" ? v.trim().slice(0, n) : "";
+  const arr = v => Array.isArray(v) ? v : [];
+  return {
+    codes: arr(d.codes).map(c => ({ word: str(c && c.word, 40), tickets: Math.min(99, Math.max(1, Math.floor(+(c && c.tickets)) || 1)) })).filter(c => c.word),
+    news: arr(d.news).map(t => str(t, 200)).filter(Boolean),
+    links: arr(d.links).map(l => ({ title: str(l && l.title, 60), url: str(l && l.url, 500), desc: str(l && l.desc, 120), type: LINK_TYPES.some(t => t.id === (l && l.type)) ? l.type : "" })).filter(l => l.title && isUrl(l.url)),
+  };
+}
+function watchSite() {
+  siteRef = fb.doc(db, "site", "config");
+  fb.onSnapshot(siteRef, snap => {
+    if (!snap.exists()) return;
+    site = cleanSite(JSON.parse(JSON.stringify(snap.data())));
+    renderSite();
+  }, () => {});
+}
+// 流れる速さを文の長さによらずそろえる(1秒に60px)
+function tickerSpeed() {
+  const tr = $("newsTrack");
+  tr.style.setProperty("--dur", Math.max(8, tr.scrollWidth / 60) + "s");
+}
+function renderSite() {
+  $("news").hidden = !site.news.length;
+  $("newsTrack").replaceChildren(...site.news.map(t => Object.assign(document.createElement("span"), { textContent: t })));
+  requestAnimationFrame(tickerSpeed);
+  $("links").hidden = !site.links.length;
+  $("linkList").replaceChildren(...site.links.map(l => {
+    const a = document.createElement("a");
+    const ty = typeOf(l);
+    a.className = "link-card"; a.href = l.url; a.target = "_blank"; a.rel = "noopener";
+    a.style.setProperty("--lc", ty.color);
+    a.innerHTML = '<div class="lt"><span class="tag"></span><span class="t"></span><span class="d"></span></div><span class="go" aria-hidden="true">›</span>';
+    a.querySelector(".tag").textContent = ty.name;
+    a.querySelector(".t").textContent = l.title;
+    a.querySelector(".d").textContent = l.desc || l.url.replace(/^https?:\/\//, "");
+    return a;
+  }));
+}
+
+let draft = null; // 管理者メニューで編集中の設定
+function openAdmin() {
+  draft = JSON.parse(JSON.stringify(site));
+  admMsg("");
+  renderAdmin();
+  $("admin").hidden = false; $("admin").scrollTop = 0; $("adminClose").focus();
+}
+function closeAdmin() { draft = null; $("admin").hidden = true; $("adminBtn").focus(); }
+function admMsg(text, kind = "") { $("admMsg").textContent = text; $("admMsg").className = "note " + kind; }
+function renderAdmin() {
+  // 入力欄1つぶん。打つたびに draft を書き換える
+  const field = (obj, key, ph, cls = "", type = "text") => {
+    const i = document.createElement("input");
+    i.type = type; i.placeholder = ph; i.className = cls; i.value = obj[key]; i.autocomplete = "off";
+    if (type === "number") { i.min = 1; i.max = 99; i.inputMode = "numeric"; }
+    i.setAttribute("aria-label", ph);
+    i.oninput = () => { obj[key] = i.value; };
+    return i;
+  };
+  const row = (list, idx, ...kids) => {
+    const r = document.createElement("div"); r.className = "adm-row";
+    const del = Object.assign(document.createElement("button"), { type: "button", className: "adm-del", textContent: "削除" });
+    del.onclick = () => { list.splice(idx, 1); renderAdmin(); };
+    r.append(...kids, del);
+    return r;
+  };
+  $("admCodes").replaceChildren(...draft.codes.map((c, i) => row(draft.codes, i,
+    field(c, "word", "キーワード"), field(c, "tickets", "枚数", "num", "number"), Object.assign(document.createElement("span"), { className: "unit", textContent: "枚" }))));
+  // news は文字列の配列なので、1行ずつ包んで編集する
+  $("admNews").replaceChildren(...draft.news.map((t, i) => {
+    const box = { v: t }, f = field(box, "v", "お知らせの文");
+    f.oninput = () => { draft.news[i] = f.value; };
+    return row(draft.news, i, f);
+  }));
+  $("admLinks").replaceChildren(...draft.links.map((l, i) => {
+    // ↑↓ で隣のリンクと入れ替える。押したボタンにフォーカスを残す
+    const move = (d, label, txt) => {
+      const b = Object.assign(document.createElement("button"), { type: "button", className: "adm-del", textContent: txt });
+      b.setAttribute("aria-label", label);
+      b.disabled = !draft.links[i + d];
+      b.onclick = () => {
+        const L = draft.links; [L[i], L[i + d]] = [L[i + d], L[i]];
+        renderAdmin();
+        const btn = $("admLinks").children[i + d].querySelectorAll("button")[d < 0 ? 0 : 1];
+        (btn.disabled ? $("admLinks").children[i + d].querySelector("input") : btn).focus();
+      };
+      return b;
+    };
+    const sel = document.createElement("select");
+    sel.setAttribute("aria-label", "サイトの種類");
+    sel.append(new Option("種類：自動（URLから判断）", ""), ...LINK_TYPES.map(t => new Option("種類：" + t.name, t.id)));
+    sel.value = l.type || "";
+    const r = row(draft.links, i, move(-1, "上へ移動", "↑"), move(1, "下へ移動", "↓"),
+      field(l, "title", "リンクの名前"), field(l, "url", "https://…"), sel, field(l, "desc", "説明（なくてもよい）", "wide"));
+    const paint = () => r.style.setProperty("--lc", typeOf(l).color);
+    sel.onchange = () => { l.type = sel.value; paint(); };
+    paint();
+    return r;
+  }));
+}
+async function saveAdmin() {
+  const bad = draft.links.find(l => (l.title.trim() || l.url.trim()) && !(l.title.trim() && isUrl(l.url.trim())));
+  if (bad) return admMsg("リンクは名前と https:// から始まるURLの両方を入れてください。", "err");
+  const words = draft.codes.map(c => normCode(c.word || "")).filter(Boolean);
+  if (new Set(words).size !== words.length) return admMsg("同じキーワードが2つあります。", "err");
+  const next = cleanSite(draft);
+  if (!siteRef) return admMsg("保存先につながっていないため保存できません。", "err");
+  $("admSave").disabled = true; admMsg("保存しています…");
+  try {
+    await fb.setDoc(siteRef, next);
+    site = next; draft = JSON.parse(JSON.stringify(next));
+    renderSite(); renderAdmin();
+    admMsg("保存しました。全員の画面に反映されます。", "ok");
+  } catch (e) {
+    admMsg("保存できませんでした: " + (e && (e.code || e.message) || e), "err");
+  }
+  $("admSave").disabled = false;
+}
+
+
+function ticketMsg(text, kind = "") { $("ticketMsg").textContent = text; $("ticketMsg").className = "ticket-msg " + kind; }
+
+async function redeem(e) {
+  if (e) e.preventDefault();
+  if (busy) return;
+  try { await redeemInner(); }
+  catch (err) { busy = false; $("codeBtn").disabled = false; ticketMsg("うまく処理できませんでした: " + (err && err.message || err), "err"); showError(err && err.message || err); }
+}
+async function redeemInner() {
+  const raw = $("codeInput").value;
+  const code = normCode(raw);
+  if (!code) return ticketMsg("キーワードを入力してください。", "err");
+  const t = site.codes.find(c => normCode(c.word) === code);
+  if (!t) return ticketMsg("そのキーワードは使えません。入力を確かめてください。", "err");
+  // チケット制にしたときに記録先を redeemed に変えた(以前の usedCodes は使わない)
+  state.redeemed = state.redeemed || [];
+  if (state.redeemed.includes(code)) return ticketMsg(`「${raw.trim()}」はもう使いました。`, "err");
+
+  state.redeemed.push(code);
+  state.tickets = (state.tickets || 0) + t.tickets;
+  save();
+  $("codeInput").value = "";
+  ticketMsg(`「${raw.trim()}」でチケットを${t.tickets}枚もらいました。好きなときに「チケットで引く」から使えます。`, "ok");
+  render();
+}
+
+// 連続ログインのごほうび: 3日ごとに1枚、7日ごとに1枚、30日ごとに2枚(重なった日は合計)
+function loginBonus(d) { return (d % 3 === 0 ? 1 : 0) + (d % 7 === 0 ? 1 : 0) + (d % 30 === 0 ? 2 : 0); }
+function nextBonus(d) { let k = d + 1; while (!loginBonus(k)) k++; return { day: k, n: loginBonus(k) }; }
+// その日はじめて開いたときに1回だけ数える(アカウントの記録を読み込んでから呼ぶ)
+function checkLogin() {
+  if (state.lastLogin === today()) return render();
+  state.loginStreak = state.lastLogin === yesterday() ? (state.loginStreak || 0) + 1 : 1;
+  state.lastLogin = today();
+  const n = loginBonus(state.loginStreak);
+  if (n) state.tickets = (state.tickets || 0) + n;
+  save(); render();
+  if (n) toast(`連続ログイン${state.loginStreak}日目！ ごほうびのチケット+${n}枚`);
+}
+function toast(msg) {
+  $("toast").textContent = msg; $("toast").hidden = false;
+  clearTimeout(toast.t); toast.t = setTimeout(() => { $("toast").hidden = true; }, 7000);
+}
+function tick() {
+  const now = new Date(); const next = new Date(now); next.setHours(24, 0, 0, 0);
+  const s = Math.max(0, Math.floor((next - now) / 1000));
+  $("cd").textContent = [s / 3600, (s % 3600) / 60, s % 60].map(v => String(Math.floor(v)).padStart(2, "0")).join(":");
+  if (state.lastDate && state.lastDate !== today() && $("pullBtn").disabled && !busy) {
+    $("card3d").classList.remove("open"); delete $("slot").dataset.rarity;
+    $("status").textContent = "TODAY'S DRAW";
+    $("resultBox").innerHTML = '<h2 class="result-name">新しい日になりました</h2><p class="result-text">今日の1枚を引けます。</p>';
+    render();
+  }
+  if (loginReady && state.lastLogin !== today() && !busy) checkLogin();
+}
+
+/* ---------- stars ---------- */
+function stars() {
+  const cv = $("stars"), ctx = cv.getContext("2d");
+  const dpr = devicePixelRatio || 1;
+  cv.width = innerWidth * dpr; cv.height = innerHeight * dpr;
+  ctx.scale(dpr, dpr);
+  for (let i = 0; i < 140; i++) {
+    const x = Math.random() * innerWidth, y = Math.random() * innerHeight, r = Math.random() * 1.4 + .2;
+    ctx.fillStyle = `rgba(255,255,255,${Math.random() * .6 + .15})`;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  }
+  for (let i = 0; i < 10; i++) {
+    const x = Math.random() * innerWidth, y = Math.random() * innerHeight * .6, r = Math.random() * 30 + 10;
+    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+    g.addColorStop(0, "rgba(255,255,255,.18)"); g.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  }
+}
+
+$("pullBtn").onclick = () => pull(false);
+$("toast").onclick = () => { $("toast").hidden = true; };
+// 図鑑のリセットは2回押しで確定(1回目から4秒で元に戻る)
+let resetArm = null;
+function disarmReset() { clearTimeout(resetArm); resetArm = null; $("resetBtn").textContent = "図鑑をリセット"; $("resetBtn").classList.remove("armed"); }
+$("resetBtn").onclick = () => {
+  if (busy) return;
+  if (!resetArm) {
+    $("resetBtn").textContent = "本当に消す？ もう一度押す";
+    $("resetBtn").classList.add("armed");
+    resetArm = setTimeout(disarmReset, 4000);
+    return;
+  }
+  disarmReset();
+  state.counts = {}; state.history = []; state.total = 0;
+  state.redeemed = []; state.usedCodes = []; state.tickets = 0;
+  save(); render();
+  ticketMsg("キーワードを入れるとチケットがもらえます。チケット1枚でカードを1枚引けます。");
+  $("resetNote").textContent = "図鑑をリセットしました。チケットは0枚になり、キーワードをもう一度使えます。";
+};
+$("ticketPullBtn").onclick = () => pull(true);
+$("zoom").onclick = () => { $("zoom").hidden = true; };
+addEventListener("keydown", e => {
+  if (e.key !== "Escape") return;
+  if (!$("zoom").hidden) $("zoom").hidden = true;
+  else if (!$("admin").hidden) closeAdmin();
+  else if (openSeries) closeBook();
+});
+// 埋め込み表示ではフォーム送信が止められるため、ボタンとEnterキーで直接処理する
+$("codeBtn").onclick = redeem;
+$("codeInput").addEventListener("keydown", e => { if (e.key === "Enter" && !e.isComposing) redeem(e); });
+$("bookClose").onclick = closeBook;
+$("coverGo").onclick = closeCover;
+$("switchBtn").onclick = () => fb.signOut(auth);
+$("logoutBtn").onclick = () => fb.signOut(auth);
+$("loginBtn").onclick = login;
+$("signupBtn").onclick = signup;
+$("nameInput").addEventListener("keydown", e => { if (e.key === "Enter" && !e.isComposing) $("passInput").focus(); });
+$("passInput").addEventListener("keydown", e => { if (e.key === "Enter" && !e.isComposing) ($("signupBtn").hidden ? login : signup)(); });
+// 名前や合言葉を打ち直したら、「新しくはじめる」はいったん引っ込める
+["nameInput", "passInput"].forEach(id => $(id).addEventListener("input", () => { $("signupBtn").hidden = true; }));
+addEventListener("resize", stars);
+addEventListener("resize", tickerSpeed);
+$("adminBtn").onclick = openAdmin;
+$("adminClose").onclick = closeAdmin;
+$("admSave").onclick = saveAdmin;
+document.querySelectorAll("[data-add]").forEach(b => b.onclick = () => {
+  const k = b.dataset.add;
+  draft[k].push(k === "codes" ? { word: "", tickets: 1 } : k === "news" ? "" : { title: "", url: "", desc: "", type: "" });
+  renderAdmin();
+  const rows = $({ codes: "admCodes", news: "admNews", links: "admLinks" }[k]).children;
+  rows[rows.length - 1].querySelector("input").focus();
+});
+
+stars(); render(); renderSite(); tick(); setInterval(tick, 1000);
+startFirebase();
+</script>
+
 </body>
 </html>
