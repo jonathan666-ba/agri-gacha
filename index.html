@@ -175,6 +175,7 @@ h1 { display: flex; align-items: center; gap: 14px; }
 .login-hello b { font-family: var(--display); font-weight: 400; font-size: 20px; }
 .who { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
 .who .note { margin: 0; }
+.spell-in { border-top: 0; padding-top: 0; }
 @keyframes rise { from { transform: translateY(16px) scale(.94); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .cover-disc { animation: none; } }
 .sealed { font-family: var(--display); font-weight: 400; font-size: 12px; color: var(--muted); border: 1.5px dashed var(--line); padding: 1px 10px; border-radius: 999px; letter-spacing: .08em; }
@@ -385,6 +386,19 @@ h1 { display: flex; align-items: center; gap: 14px; }
     <div class="reset-row">
       <button class="reset-btn" id="resetBtn" type="button">図鑑をリセット</button>
       <span class="note" id="resetNote">集めたカード、引いた記録、使ったキーワード、手持ちのチケットを消します。今日のガチャはそのままです。</span>
+    </div>
+  </section>
+
+  <section class="binder">
+    <h2>復活の呪文</h2>
+    <p>前のページ（claude.ai）で書き写した「ふっかつのじゅもん」を入れると、そのときのカードとチケットを受け取れます。今のカードに足されます。1つの呪文は1回だけ使えます。</p>
+    <div class="ticket spell-in">
+      <label for="spellInput">FUKKATSU NO JUMON ・ ふっかつのじゅもん</label>
+      <div class="ticket-row">
+        <input id="spellInput" type="text" placeholder="29文字の呪文を入力" maxlength="80" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="done">
+        <button type="button" id="spellBtn">となえる</button>
+      </div>
+      <p class="ticket-msg" id="spellMsg" aria-live="polite">空白やカタカナが混ざっていても大丈夫です。</p>
     </div>
   </section>
 
@@ -1242,6 +1256,120 @@ async function saveAdmin() {
 }
 
 
+/* ---------- 復活の呪文: 前のページ(claude.ai)の記録を受け取る ----------
+   ここから readSpell までは、前のページの呪文の作り方と対になっている。前のページと同じ中身のまま変えない。
+   中身(この順): カード66種×2ビット(0〜3枚。まだ出していない宝箱・特殊スキルは入れない) / チケット5ビット(0〜31) / 連続ログイン4ビット(0〜15)
+   / 図鑑に入りきらない累計4ビット(0〜15) / 最後にログインした日10ビット(2026-01-01からの日数、0は記録なし)
+   / キーワード2ビット(あぐり・さかいり) = 157ビット。
+   並べ方: CRC-16(16ビット) + 中身157ビット + 0を1ビット = 174ビット = 6ビット×29文字。
+   先頭3文字はそのまま、残りはCRCを種にした乱数でかき混ぜる。
+*/
+const SPELL_KANA = "あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをんがぎぐげござじずぜぞだでどばびぶべぼ";
+const SPELL_CARDS = [
+  "plough", "ridge", "fert", "water", "pest", "mow", "addfert", "maint", "early", "trellis", "grading",
+  "disbud", "matsutake", "windnet", "fert2", "grading2", "water2", "pest2", "vinyl", "weed2", "plough2",
+  "ridge2", "maint2", "mulch", "growth", "fert3", "combine", "grading3", "pest3", "plough3", "manip", "weed3",
+  "remote", "soil", "assist", "fieldsv", "hinagiku", "oubayuri", "dokudami", "yamagobo", "hebiichigo",
+  "iwamitsuba", "kuroyuri", "baikal", "onikuwa", "aogomi", "gengoro", "gifu", "maimai", "senchi", "maruhana",
+  "tonosama", "holstein", "jersey", "brownswiss", "zebu", "ayrshire", "guernsey", "hakusanichige",
+  "atsumorisou", "rebunkozakura", "hakusanchidori", "hanashinobu", "kinbaisou", "rishiri_a", "rishiri_r",
+];
+const SPELL_WORDS = ["あぐり", "さかいり"];
+const SPELL_EPOCH = Date.UTC(2026, 0, 1);
+const spellCap = (v, max) => Math.min(max, Math.max(0, Math.floor(+v) || 0));
+function spellDay(date) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date || "");
+  return m ? spellCap((Date.UTC(+m[1], m[2] - 1, +m[3]) - SPELL_EPOCH) / 86400000, 1023) : 0;
+}
+// CRC-16/CCITT-FALSE。ビット列を8ビットずつ区切って計算する(端は0で埋める)
+function spellCrc(bits) {
+  let crc = 0xffff;
+  for (let i = 0; i < bits.length; i += 8) {
+    let byte = 0;
+    for (let j = 0; j < 8; j++) byte = byte << 1 | (bits[i + j] || 0);
+    crc ^= byte << 8;
+    for (let k = 0; k < 8; k++) crc = crc & 0x8000 ? (crc << 1 ^ 0x1021) & 0xffff : crc << 1 & 0xffff;
+  }
+  return crc;
+}
+// 種から決まる乱数(mulberry32)。呪文をかき混ぜる・元に戻すのに使う
+function spellRand(seed) {
+  let a = seed >>> 0;
+  return () => { a = a + 0x6d2b79f5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return (t ^ t >>> 14) >>> 0; };
+}
+const SPELL_LEN = 29;
+// 呪文の文字だけを取り出す。空白・カタカナ・全角半角の違いは気にしない
+const spellChars = text => [...normCode(text || "").replace(/[\s・･、。,.\-ー－]/g, "")];
+// 呪文を記録に戻す。空白・カタカナ・全角半角の違いは気にしない。間違っていれば null
+function readSpell(text) {
+  const chars = spellChars(text);
+  if (chars.length !== SPELL_LEN) return null;
+  const vals = chars.map(ch => SPELL_KANA.indexOf(ch));
+  if (vals.some(v => v < 0)) return null;
+  const crc = (vals[0] << 10 | vals[1] << 4 | vals[2] >> 2) & 0xffff;
+  const rnd = spellRand(crc), bits = [];
+  vals.forEach((v, k) => { if (k >= 3) v ^= rnd() & 63; for (let j = 5; j >= 0; j--) bits.push(v >> j & 1); });
+  const data = bits.slice(16, 173);
+  if (bits[173] || spellCrc(data) !== crc) return null;
+  let p = 0;
+  const take = n => { let v = 0; for (let i = 0; i < n; i++) v = v << 1 | data[p++]; return v; };
+  const counts = {};
+  for (const id of SPELL_CARDS) { const n = take(2); if (n) counts[id] = n; }
+  const tickets = take(5), loginStreak = take(4), extra = take(4), day = take(10);
+  const redeemed = SPELL_WORDS.filter(() => take(1));
+  return {
+    counts, tickets, loginStreak, redeemed,
+    total: Object.values(counts).reduce((a, b) => a + b, 0) + extra,
+    lastLogin: day ? new Date(SPELL_EPOCH + day * 86400000).toISOString().slice(0, 10) : null,
+  };
+}
+// 呪文の記録を、今の記録に足す。連続ログインは、呪文の日付から続いていれば引き継ぐ
+function mergeSpell(base, sp) {
+  base.counts = base.counts || {};
+  for (const [id, n] of Object.entries(sp.counts)) base.counts[id] = (base.counts[id] || 0) + n;
+  base.total = (base.total || 0) + sp.total;
+  base.tickets = (base.tickets || 0) + sp.tickets;
+  base.redeemed = [...new Set([...(base.redeemed || []), ...sp.redeemed])];
+  const run = sp.lastLogin === today() ? sp.loginStreak : sp.lastLogin === yesterday() ? sp.loginStreak + 1 : 0;
+  if (base.lastLogin === today() && run > (base.loginStreak || 0)) base.loginStreak = run;
+  return base;
+}
+async function spellPrint(chars) {
+  const h = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(chars.join("")));
+  return [...new Uint8Array(h)].map(b => b.toString(16).padStart(2, "0")).join("");
+}
+function spellMsg(text, kind = "") { $("spellMsg").textContent = text; $("spellMsg").className = "ticket-msg " + kind; }
+// 呪文を使う。使った呪文は spells/{指紋} に残し、自分の記録と同時に書く(片方だけ書かれることはない)
+async function castSpell() {
+  if (busy || !playerRef || !me) return;
+  const sp = readSpell($("spellInput").value);
+  if (!sp) return spellMsg("じゅもんが ちがいます。1文字ずつ見直してください。", "err");
+  busy = true; $("spellBtn").disabled = true; render();
+  spellMsg("となえています…");
+  let next = null;
+  try {
+    const usedRef = fb.doc(db, "spells", await spellPrint(spellChars($("spellInput").value)));
+    await fb.runTransaction(db, async tx => {
+      const used = await tx.get(usedRef), cur = await tx.get(playerRef);
+      if (used.exists()) throw Object.assign(new Error("used"), { code: "spell/used" });
+      const base = JSON.parse(JSON.stringify(cur.exists() ? cur.data() : state));
+      delete base.name; delete base.nameKey; delete base.updatedAt;
+      next = mergeSpell(Object.assign(freshState(), base), sp);
+      tx.set(usedRef, { uid: me.uid, name: me.name, at: fb.serverTimestamp() });
+      tx.set(playerRef, { ...JSON.parse(JSON.stringify(next)), name: me.name, nameKey: me.key, updatedAt: fb.serverTimestamp() });
+    });
+    state = next;
+    const cards = Object.values(sp.counts).reduce((a, b) => a + b, 0);
+    $("spellInput").value = "";
+    spellMsg(`呪文が通じました！ カード${cards}枚とチケット${sp.tickets}枚を受け取りました。`, "ok");
+    toast(`ふっかつのじゅもんが 通じた！ カード${cards}枚・チケット${sp.tickets}枚`);
+  } catch (e) {
+    if (e.code === "spell/used") spellMsg("この呪文はもう使われています。1つの呪文は1回だけ使えます。", "err");
+    else { spellMsg("呪文を使えませんでした。通信のよいところで、もう一度試してください。", "err"); showError(e && (e.code || e.message) || e); }
+  }
+  busy = false; $("spellBtn").disabled = false; render();
+}
+
 function ticketMsg(text, kind = "") { $("ticketMsg").textContent = text; $("ticketMsg").className = "ticket-msg " + kind; }
 
 async function redeem(e) {
@@ -1347,6 +1475,8 @@ addEventListener("keydown", e => {
 });
 // 埋め込み表示ではフォーム送信が止められるため、ボタンとEnterキーで直接処理する
 $("codeBtn").onclick = redeem;
+$("spellBtn").onclick = castSpell;
+$("spellInput").addEventListener("keydown", e => { if (e.key === "Enter" && !e.isComposing) castSpell(); });
 $("codeInput").addEventListener("keydown", e => { if (e.key === "Enter" && !e.isComposing) redeem(e); });
 $("bookClose").onclick = closeBook;
 $("coverGo").onclick = closeCover;
