@@ -176,6 +176,45 @@ h1 { display: flex; align-items: center; gap: 14px; }
 .who { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
 .who .note { margin: 0; }
 .spell-in { border-top: 0; padding-top: 0; }
+/* 交換所: 出品の一覧。各出品は 画像＋中身 の横並び */
+.trade-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-bottom: 16px; }
+.trade-bar .note { margin: 0; }
+.trade-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 16px; }
+.trade-empty { font-size: 13px; color: var(--muted); }
+.lst { display: flex; gap: 12px; background: var(--panel); border: 1.5px solid var(--line); border-radius: 14px; padding: 12px; min-width: 0; }
+.lst.mine { border-color: var(--accent); }
+.lst > button { flex: none; border: 0; padding: 0; background: none; cursor: pointer; border-radius: 6px; align-self: start; }
+.lst > button img { width: 72px; aspect-ratio: 256 / 395; object-fit: cover; border-radius: 6px; display: block; }
+.lst-body { display: grid; gap: 6px; min-width: 0; flex: 1; align-content: start; }
+.lst-title { font-family: var(--display); font-weight: 400; font-size: 16px; line-height: 1.3; }
+.lst-meta { font-size: 12px; color: var(--muted); }
+.lst-note { font-size: 13px; overflow-wrap: anywhere; }
+.chips { display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center; }
+.chips .lbl { font-size: 12px; color: var(--muted); }
+.chip { font: inherit; font-size: 12px; line-height: 1.6; border: 1px solid var(--line); border-radius: 999px; padding: 0 8px; color: var(--muted); background: none; }
+.chip.have { color: var(--ssr); border-color: var(--ssr); }
+button.chip { cursor: pointer; }
+button.chip.on { color: #2a1530; background: var(--accent); border-color: var(--accent); }
+button.chip:disabled { opacity: .35; cursor: default; }
+button.chip:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.lst-act { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.offers { display: grid; gap: 8px; padding-top: 6px; border-top: 1px solid var(--line); }
+.offer { display: flex; align-items: center; gap: 8px; font-size: 13px; min-width: 0; }
+.offer img { width: 36px; aspect-ratio: 256 / 395; object-fit: cover; border-radius: 4px; flex: none; }
+.offer .ow { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.pick { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 12px; }
+.pick .cell .meta { font-size: 12px; margin-top: 4px; }
+.pick .cell.sel img { outline: 3px solid var(--ssr); outline-offset: 2px; }
+.pick .cell .want { position: absolute; top: 4px; left: 4px; font-size: 11px; color: #2e2208; background: var(--ssr); border-radius: 999px; padding: 0 6px; }
+.trade-form { display: grid; gap: 14px; }
+.trade-form h3 { font-family: var(--display); font-weight: 400; font-size: 17px; margin: 0; }
+.trade-form .note { margin: 0; }
+.trade-form input { background: var(--night-2); color: var(--ink); border: 1.5px solid var(--line); border-radius: 10px; padding: 10px 12px; font: inherit; }
+.trade-form input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.want-series { display: grid; gap: 6px; }
+.want-series b { font-size: 13px; font-weight: 700; color: var(--muted); }
+.trade-go { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 18px; }
+.trade-go .note.err { color: var(--accent); }
 @keyframes rise { from { transform: translateY(16px) scale(.94); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .cover-disc { animation: none; } }
 .sealed { font-family: var(--display); font-weight: 400; font-size: 12px; color: var(--muted); border: 1.5px dashed var(--line); padding: 1px 10px; border-radius: 999px; letter-spacing: .08em; }
@@ -389,6 +428,16 @@ h1 { display: flex; align-items: center; gap: 14px; }
     </div>
   </section>
 
+  <section class="binder" id="trade">
+    <h2>交換所</h2>
+    <p>2枚以上持っているカードを出品して、ほかの人のカードと交換できます。出品は3日で終わり、終わるとカードは戻ってきます。</p>
+    <div class="trade-bar">
+      <button class="pull alt" id="listBtn" type="button">カードを出品する</button>
+      <span class="note" id="tradeNote"></span>
+    </div>
+    <div class="trade-list" id="tradeList"></div>
+  </section>
+
   <section class="binder">
     <h2>復活の呪文</h2>
     <p>前のページ（claude.ai）で書き写した「ふっかつのじゅもん」を入れると、そのときのカードとチケットを受け取れます。今のカードに足されます。1つの呪文は1回だけ使えます。</p>
@@ -450,6 +499,16 @@ h1 { display: flex; align-items: center; gap: 14px; }
       <button class="pull" id="admSave" type="button">保存する</button>
       <span class="note" id="admMsg" aria-live="polite"></span>
     </div>
+  </div>
+</div>
+
+<div class="book" id="tradeDlg" hidden role="dialog" aria-modal="true" aria-labelledby="tradeTitle">
+  <div class="book-inner">
+    <div class="book-head">
+      <button class="back-btn" id="tradeClose" type="button">← もどる</button>
+      <h2 id="tradeTitle"></h2>
+    </div>
+    <div class="trade-form" id="tradeBody"></div>
   </div>
 </div>
 
@@ -751,6 +810,7 @@ async function enter(user) {
   $("whoNote").textContent = `${me.name} さんで遊んでいます`;
   $("logoutBtn").hidden = false;
   $("saveNote").textContent = "記録はあなたのアカウント（名前と合言葉）に保存されています。";
+  watchTrade();
   if (pendingName) { pendingName = null; closeCover(); }
   else { $("welcomeName").textContent = me.name; showCover("welcome"); }
   loginReady = true; checkLogin(); render();
@@ -764,7 +824,8 @@ function useRemote(d) {
 function leave() {
   if (stopPlayer) stopPlayer();
   if (stopAdmin) stopAdmin();
-  stopPlayer = stopAdmin = null; playerRef = null; me = null; loginReady = false;
+  stopPlayer = stopAdmin = null;
+  stopTrade(); playerRef = null; me = null; loginReady = false;
   state = freshState();
   $("adminBtn").hidden = true; $("logoutBtn").hidden = true; $("whoNote").textContent = "";
   render();
@@ -906,7 +967,7 @@ function render() {
   const hist = state.history.slice(-10).reverse();
   $("log").replaceChildren(...(hist.length ? hist.map(h => {
     const li = document.createElement("li"); const c = byId[h.id];
-    li.innerHTML = `<span>${h.date}</span><span class="badge ${c.r}">${c.r}</span><span>${c.name}</span>${h.via ? '<span class="via">チケット</span>' : ""}`;
+    li.innerHTML = `<span>${h.date}</span><span class="badge ${c.r}">${c.r}</span><span>${c.name}</span>${h.via ? `<span class="via">${h.via === "trade" ? "交換" : "チケット"}</span>` : ""}`;
     return li;
   }) : [Object.assign(document.createElement("li"), { textContent: "まだ1枚も引いていません。" })]));
 
@@ -918,6 +979,7 @@ function render() {
   $("ticketPullBtn").disabled = busy;
   $("ticketLeft").textContent = "×" + tk;
   $("countdown").hidden = !done;
+  renderTrade();
   if (done && !busy && state.history.length && !$("card3d").classList.contains("open")) showCard(byId[state.history[state.history.length - 1].id], false, "TODAY'S CARD");
 }
 
@@ -1370,6 +1432,357 @@ async function castSpell() {
   busy = false; $("spellBtn").disabled = false; render();
 }
 
+/* ---------- 交換所: 出品 → オファー → 出品者が選んで成立 ----------
+   自分の記録(players/{uid})を書けるのは本人だけなので、カードは「預ける → 各自が自分の分を受け取る」形にする。
+   出品: 出品者がカードを1枚預けて listings/{id} を作る。
+   オファー: オファーした人がカードを1枚預けて listings/{id}/offers/{uid} を作る。
+   成立: 出品者がオファーを選ぶと、その場で選んだカードを受け取る。選ばれた人は出品のカードを、
+   選ばれなかった人は自分のカードを、次にページを開いたとき(開いていればすぐ)に受け取る(settleTrades)。
+   どれも自分の記録と同時に書くトランザクションで行い、ルール(firestore.rules)でも順番を守らせる */
+const TRADE_DAYS = 3, MAX_LISTINGS = 3, MAX_OFFERS = 10, MAX_WANT = 5, NOTE_LEN = 30;
+let listings = [];             // 受付中の出品(期限切れも含む)
+const offerWatch = new Map();  // 出品id → { stop, offers }
+let stopListings = null, settling = false, offerToastShown = false;
+let tradeDraft = null;         // ダイアログで選んでいるもの
+
+const cardName = id => byId[id] ? byId[id].name : "？";
+const canTrade = id => (state.counts[id] || 0) >= 2;
+const endsAt = l => l.createdAt ? l.createdAt.toMillis() + TRADE_DAYS * 864e5 : Infinity;
+const expired = l => endsAt(l) <= Date.now();
+const offersOf = id => (offerWatch.get(id) || { offers: [] }).offers;
+const openOffers = id => offersOf(id).filter(o => o.status === "open" && byId[o.card]);
+function leftText(l) {
+  const ms = endsAt(l) - Date.now();
+  if (!isFinite(ms)) return "受付中";
+  if (ms <= 0) return "期限切れ";
+  const h = Math.floor(ms / 36e5);
+  return h >= 24 ? `あと${Math.floor(h / 24)}日` : h >= 1 ? `あと${h}時間` : "まもなく終了";
+}
+
+function watchTrade() {
+  stopTrade();
+  const q = fb.query(fb.collection(db, "listings"), fb.where("status", "==", "open"));
+  stopListings = fb.onSnapshot(q, snap => {
+    listings = snap.docs.map(d => ({ id: d.id, ...d.data({ serverTimestamps: "estimate" }) })).filter(l => byId[l.card]);
+    // 出品ごとのオファーを見張る(出品がなくなったら見張りもやめる)
+    for (const [id, w] of offerWatch) if (!listings.some(l => l.id === id)) { w.stop(); offerWatch.delete(id); }
+    for (const l of listings) if (!offerWatch.has(l.id)) {
+      const w = { offers: [], stop: null };
+      offerWatch.set(l.id, w);
+      w.stop = fb.onSnapshot(fb.collection(db, "listings", l.id, "offers"), s => {
+        w.offers = s.docs.map(d => d.data());
+        renderTrade(); offerToast();
+      }, () => {});
+    }
+    renderTrade(); settleTrades();
+  }, e => showError("交換所を読み込めませんでした: " + (e && e.code || e)));
+}
+function stopTrade() {
+  if (stopListings) stopListings();
+  stopListings = null;
+  for (const w of offerWatch.values()) if (w.stop) w.stop();
+  offerWatch.clear(); listings = []; offerToastShown = false;
+  closeTrade();
+}
+// 自分の出品にオファーが来ていたら、開いたときに1回だけ知らせる
+function offerToast() {
+  if (offerToastShown || !me) return;
+  const mine = listings.filter(l => l.uid === me.uid && !expired(l));
+  if (mine.some(l => !offerWatch.has(l.id))) return;
+  const n = mine.reduce((a, l) => a + openOffers(l.id).length, 0);
+  offerToastShown = true;
+  if (n) toast(`あなたの出品にオファーが${n}件届いています。交換所で選べます`);
+}
+
+// 自分の記録を読み直して、fn で書き換えて書き戻す。fn の中では読む(tx.get)のを書く(tx.set など)より先にする
+async function playerTx(fn) {
+  let next = null;
+  await fb.runTransaction(db, async tx => {
+    const cur = await tx.get(playerRef);
+    const base = Object.assign(freshState(), JSON.parse(JSON.stringify(cur.exists() ? cur.data() : state)));
+    delete base.name; delete base.nameKey; delete base.updatedAt;
+    base.myListings = base.myListings || []; base.myOffers = base.myOffers || [];
+    await fn(tx, base);
+    tx.set(playerRef, { ...JSON.parse(JSON.stringify(base)), name: me.name, nameKey: me.key, updatedAt: fb.serverTimestamp() });
+    next = base;
+  });
+  state = next;
+}
+const tradeErr = msg => Object.assign(new Error(msg), { trade: true });
+function gain(base, id) {
+  base.counts[id] = (base.counts[id] || 0) + 1;
+  base.history.push({ id, date: today(), via: "trade" });
+  base.history = base.history.slice(-60);
+}
+// 交換の操作をひとつ行う。失敗したら理由を出す
+async function tradeAct(fn, done) {
+  if (busy || !playerRef) return false;
+  busy = true; render();
+  try { await playerTx(fn); if (done) toast(done); return true; }
+  catch (e) {
+    if (e.trade) toast(e.message);
+    else { toast("うまくいきませんでした。もう一度試してください。"); showError(e && (e.code || e.message) || e); }
+    return false;
+  } finally { busy = false; render(); }
+}
+
+// 終わった出品とオファーの後始末。自分のカードを受け取ったり、戻したりする
+async function settleTrades() {
+  if (!playerRef || !me || busy || settling) return;
+  settling = true;
+  const news = [];
+  try {
+    for (const id of [...(state.myOffers || [])]) {
+      const lref = fb.doc(db, "listings", id), oref = fb.doc(db, "listings", id, "offers", me.uid);
+      const pre = await fb.getDoc(lref);
+      if (pre.exists() && pre.data().status === "open" && !expired(pre.data())) continue;
+      if (busy) break;
+      await playerTx(async (tx, base) => {
+        const ls = await tx.get(lref), os = await tx.get(oref);
+        base.myOffers = base.myOffers.filter(x => x !== id);
+        if (!ls.exists() || !os.exists() || os.data().status !== "open") return;
+        const L = ls.data(), O = os.data();
+        if (L.status === "done" && L.chosen && L.chosen.uid === me.uid) {
+          gain(base, L.card);
+          tx.update(oref, { status: "received" });
+          news.push(`交換成立！ ${L.name}さんから「${cardName(L.card)}」を受け取りました`);
+        } else {
+          base.counts[O.card] = (base.counts[O.card] || 0) + 1;
+          tx.update(oref, { status: "returned" });
+          news.push(`オファーした「${cardName(O.card)}」が戻ってきました`);
+        }
+      });
+    }
+    for (const id of [...(state.myListings || [])]) {
+      const lref = fb.doc(db, "listings", id);
+      const pre = await fb.getDoc(lref);
+      if (pre.exists() && pre.data().status === "open" && !expired(pre.data())) continue;
+      if (busy) break;
+      await playerTx(async (tx, base) => {
+        const ls = await tx.get(lref);
+        base.myListings = base.myListings.filter(x => x !== id);
+        if (!ls.exists() || ls.data().status !== "open") return;
+        const L = ls.data();
+        base.counts[L.card] = (base.counts[L.card] || 0) + 1;
+        tx.update(lref, { status: "closed", closedAt: fb.serverTimestamp() });
+        news.push(`出品した「${cardName(L.card)}」は期限が切れたので戻ってきました`);
+      });
+    }
+  } catch (e) {
+    showError("交換の後始末ができませんでした: " + (e && (e.code || e.message) || e));
+  } finally { settling = false; }
+  if (news.length) { render(); toast(news.join(" / ")); }
+}
+
+/* ---------- 交換所の画面 ---------- */
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text != null) e.textContent = text;
+  return e;
+}
+function smallBtn(text, onclick, cls = "reset-btn") {
+  const b = el("button", cls, text); b.type = "button"; b.onclick = onclick; b.disabled = busy;
+  return b;
+}
+function thumb(id) {
+  const b = el("button"); b.type = "button";
+  const img = el("img"); img.src = `cards/${id}.jpg`; img.alt = cardName(id);
+  b.append(img);
+  b.onclick = () => { $("zoomImg").src = `cards/${id}.jpg`; $("zoomImg").alt = cardName(id); $("zoom").hidden = false; };
+  return b;
+}
+function renderTrade() {
+  if (!$("tradeList")) return;
+  if (!me) { $("tradeList").replaceChildren(); $("tradeNote").textContent = ""; return; }
+  const mine = listings.filter(l => l.uid === me.uid && !expired(l));
+  $("listBtn").disabled = busy || mine.length >= MAX_LISTINGS;
+  $("tradeNote").textContent = mine.length >= MAX_LISTINGS ? `出品は${MAX_LISTINGS}つまでです。` : `出品中 ${mine.length}/${MAX_LISTINGS}`;
+  // 自分の出品を先に、あとは新しい順
+  const shown = listings.filter(l => !expired(l)).sort((a, b) => (b.uid === me.uid) - (a.uid === me.uid) || endsAt(b) - endsAt(a));
+  if (!shown.length) { $("tradeList").replaceChildren(el("p", "trade-empty", "いまは出品がありません。")); return; }
+  $("tradeList").replaceChildren(...shown.map(listingCard));
+}
+function listingCard(l) {
+  const c = byId[l.card], isMine = l.uid === me.uid, offers = openOffers(l.id);
+  const myOffer = offersOf(l.id).find(o => o.uid === me.uid && o.status === "open");
+  const box = el("article", "lst" + (isMine ? " mine" : ""));
+  const body = el("div", "lst-body");
+  const title = el("div", "lst-title");
+  title.append(el("span", `badge ${c.r}`, c.r), " ", c.name);
+  body.append(title, el("div", "lst-meta", `${isMine ? "あなた" : l.name + " さん"}の出品 ・ ${leftText(l)} ・ オファー${offers.length}件`));
+  const want = (l.want || []).filter(id => byId[id]);
+  if (want.length) {
+    const chips = el("div", "chips");
+    chips.append(el("span", "lbl", "ほしい："), ...want.map(id => el("span", "chip" + (!isMine && canTrade(id) ? " have" : ""), cardName(id))));
+    body.append(chips);
+  }
+  if (l.note) body.append(el("div", "lst-note", `「${l.note}」`));
+  const act = el("div", "lst-act");
+  if (isMine) {
+    act.append(smallBtn("出品を取り消す", () => cancelListing(l)));
+    body.append(act);
+    if (offers.length) {
+      const list = el("div", "offers");
+      list.append(el("div", "lst-meta", "オファー（交換したいカードを選ぶと成立します）"), ...offers.map(o => {
+        const row = el("div", "offer"), img = el("img");
+        img.src = `cards/${o.card}.jpg`; img.alt = "";
+        const w = el("span", "ow");
+        w.append(el("span", `badge ${byId[o.card].r}`, byId[o.card].r), ` ${cardName(o.card)}（${o.name} さん）${want.includes(o.card) ? " ★ほしいカード" : ""}`);
+        row.append(img, w, smallBtn("これにする", () => chooseOffer(l, o), "adm-del"));
+        return row;
+      }));
+      body.append(list);
+    } else body.append(el("div", "lst-meta", "まだオファーはありません。"));
+  } else {
+    if (myOffer) {
+      act.append(el("span", "lst-meta", `オファー中：${cardName(myOffer.card)}`), smallBtn("オファーを取り消す", () => withdrawOffer(l)));
+    } else {
+      const b = smallBtn(offers.length >= MAX_OFFERS ? `オファーは${MAX_OFFERS}件までです` : "オファーする", () => openOffer(l));
+      b.disabled = busy || offers.length >= MAX_OFFERS;
+      act.append(b);
+    }
+    body.append(act);
+  }
+  box.append(thumb(l.card), body);
+  return box;
+}
+
+// カードを選ぶ一覧(2枚以上あるカードだけ)
+function pickGrid(ids, selected, onpick, wanted = []) {
+  const grid = el("div", "pick");
+  if (!ids.length) return el("p", "note", "2枚以上持っているカードがありません。");
+  grid.append(...ids.map(id => {
+    const c = byId[id], b = el("button", "cell" + (id === selected ? " sel" : ""));
+    b.type = "button";
+    b.innerHTML = `<img src="cards/${id}.jpg" alt=""><div class="meta"><span class="nm"></span><span class="badge ${c.r}">${c.r}</span></div><div class="cnt">×${state.counts[id]}</div>`;
+    b.querySelector(".nm").textContent = c.name;
+    if (wanted.includes(id)) b.prepend(el("span", "want", "ほしい"));
+    b.setAttribute("aria-pressed", id === selected);
+    b.setAttribute("aria-label", `${c.name} ${c.r} ${state.counts[id]}枚`);
+    b.onclick = () => onpick(id);
+    return b;
+  }));
+  return grid;
+}
+const tradable = (except) => CARDS.filter(c => canTrade(c.id) && c.id !== except).map(c => c.id);
+function openDlg(title) {
+  $("tradeTitle").textContent = title;
+  $("tradeDlg").hidden = false; $("tradeDlg").scrollTop = 0;
+}
+function closeTrade() { tradeDraft = null; if ($("tradeDlg")) $("tradeDlg").hidden = true; }
+function goRow(label, onclick, ready) {
+  const row = el("div", "trade-go"), b = el("button", "pull", label), msg = el("span", "note");
+  b.type = "button"; b.disabled = !ready; b.onclick = async () => { b.disabled = true; msg.textContent = "送っています…"; msg.className = "note"; if (await onclick()) closeTrade(); else { b.disabled = false; msg.textContent = ""; } };
+  row.append(b, msg);
+  return row;
+}
+
+function openListing() {
+  if (!me || busy) return;
+  tradeDraft = tradeDraft && tradeDraft.kind === "list" ? tradeDraft : { kind: "list", card: null, want: [], note: "" };
+  const d = tradeDraft;
+  openDlg("カードを出品する");
+  const f = [];
+  f.push(el("h3", "", "出すカード"), el("p", "note", "2枚以上持っているカードから1枚選びます。出品中は手持ちから1枚あずかり、取り消すか期限が切れると戻ります。"));
+  f.push(pickGrid(tradable(), d.card, id => { d.card = id; d.want = d.want.filter(w => w !== id); openListing(); }));
+  f.push(el("h3", "", "ほしいカード"), el("p", "note", `${MAX_WANT}枚まで選べます（なくてもかまいません）。ほかの人がオファーするときの目印になります。`));
+  for (const s of SERIES) {
+    const box = el("div", "want-series"), chips = el("div", "chips");
+    box.append(el("b", "", `${s.name}シリーズ`));
+    chips.append(...CARDS.filter(c => c.s === s.id).map(c => {
+      const on = d.want.includes(c.id), b = el("button", "chip" + (on ? " on" : ""), c.name);
+      b.type = "button"; b.setAttribute("aria-pressed", on);
+      b.disabled = c.id === d.card || (!on && d.want.length >= MAX_WANT);
+      b.onclick = () => { d.want = on ? d.want.filter(w => w !== c.id) : [...d.want, c.id]; const y = $("tradeDlg").scrollTop; openListing(); $("tradeDlg").scrollTop = y; };
+      return b;
+    }));
+    box.append(chips); f.push(box);
+  }
+  const note = el("input"); note.type = "text"; note.maxLength = NOTE_LEN; note.placeholder = `ひとこと（${NOTE_LEN}文字まで・なくてもよい）`; note.value = d.note;
+  note.setAttribute("aria-label", "ひとこと");
+  note.oninput = () => { d.note = note.value; };
+  f.push(el("h3", "", "ひとこと"), note);
+  f.push(goRow("出品する", () => createListing(d.card, d.want, d.note.trim().slice(0, NOTE_LEN)), !!d.card));
+  $("tradeBody").replaceChildren(...f);
+}
+async function createListing(card, want, note) {
+  const lref = fb.doc(fb.collection(db, "listings"));
+  return tradeAct(async (tx, base) => {
+    if ((base.counts[card] || 0) < 2) throw tradeErr("2枚以上持っているカードだけ出品できます。");
+    if (base.myListings.length >= MAX_LISTINGS) throw tradeErr(`出品は${MAX_LISTINGS}つまでです。`);
+    base.counts[card] -= 1;
+    base.myListings.push(lref.id);
+    tx.set(lref, { uid: me.uid, name: me.name, card, want, note, status: "open", chosen: null, createdAt: fb.serverTimestamp() });
+  }, `「${cardName(card)}」を出品しました`);
+}
+async function cancelListing(l) {
+  const lref = fb.doc(db, "listings", l.id);
+  return tradeAct(async (tx, base) => {
+    const ls = await tx.get(lref);
+    if (!ls.exists() || ls.data().status !== "open") throw tradeErr("この出品はもう終わっています。");
+    base.counts[l.card] = (base.counts[l.card] || 0) + 1;
+    base.myListings = base.myListings.filter(x => x !== l.id);
+    tx.update(lref, { status: "closed", closedAt: fb.serverTimestamp() });
+  }, `出品を取り消しました。「${cardName(l.card)}」が戻りました`);
+}
+async function chooseOffer(l, o) {
+  const lref = fb.doc(db, "listings", l.id), oref = fb.doc(db, "listings", l.id, "offers", o.uid);
+  return tradeAct(async (tx, base) => {
+    const ls = await tx.get(lref), os = await tx.get(oref);
+    if (!ls.exists() || ls.data().status !== "open") throw tradeErr("この出品はもう終わっています。");
+    if (expired({ createdAt: ls.data().createdAt })) throw tradeErr("期限が切れたため、交換できません。");
+    if (!os.exists() || os.data().status !== "open") throw tradeErr("このオファーは取り消されました。");
+    const O = os.data();
+    gain(base, O.card);
+    base.myListings = base.myListings.filter(x => x !== l.id);
+    tx.update(lref, { status: "done", chosen: { uid: O.uid, name: O.name, card: O.card }, closedAt: fb.serverTimestamp() });
+  }, `交換成立！ ${o.name}さんの「${cardName(o.card)}」を受け取りました`);
+}
+
+function openOffer(l) {
+  if (!me || busy) return;
+  tradeDraft = tradeDraft && tradeDraft.kind === "offer" && tradeDraft.id === l.id ? tradeDraft : { kind: "offer", id: l.id, card: null };
+  const d = tradeDraft, c = byId[l.card], want = (l.want || []).filter(id => byId[id]);
+  openDlg("オファーする");
+  const head = el("div", "lst");
+  const hb = el("div", "lst-body"), t = el("div", "lst-title");
+  t.append(el("span", `badge ${c.r}`, c.r), " ", c.name);
+  hb.append(t, el("div", "lst-meta", `${l.name} さんの出品 ・ ${leftText(l)}`));
+  if (l.note) hb.append(el("div", "lst-note", `「${l.note}」`));
+  head.append(thumb(l.card), hb);
+  // ほしいカードを先に並べる
+  const ids = tradable(l.card).sort((a, b) => want.includes(b) - want.includes(a));
+  $("tradeBody").replaceChildren(head,
+    el("h3", "", "オファーするカード"),
+    el("p", "note", "2枚以上持っているカードから1枚選びます。オファー中は手持ちから1枚あずかり、選ばれなかったときや取り消したときは戻ります。"),
+    pickGrid(ids, d.card, id => { d.card = id; const y = $("tradeDlg").scrollTop; openOffer(l); $("tradeDlg").scrollTop = y; }, want),
+    goRow("オファーする", () => makeOffer(l, d.card), !!d.card));
+}
+async function makeOffer(l, card) {
+  if (openOffers(l.id).length >= MAX_OFFERS) { toast(`この出品へのオファーは${MAX_OFFERS}件までです。`); return false; }
+  const oref = fb.doc(db, "listings", l.id, "offers", me.uid);
+  return tradeAct(async (tx, base) => {
+    const os = await tx.get(oref);
+    if (os.exists() && os.data().status !== "returned") throw tradeErr("この出品には、もうオファーしています。");
+    if ((base.counts[card] || 0) < 2) throw tradeErr("2枚以上持っているカードだけオファーできます。");
+    base.counts[card] -= 1;
+    if (!base.myOffers.includes(l.id)) base.myOffers.push(l.id);
+    tx.set(oref, { uid: me.uid, name: me.name, card, status: "open", at: fb.serverTimestamp() });
+  }, `「${cardName(card)}」でオファーしました`);
+}
+async function withdrawOffer(l) {
+  const lref = fb.doc(db, "listings", l.id), oref = fb.doc(db, "listings", l.id, "offers", me.uid);
+  return tradeAct(async (tx, base) => {
+    const ls = await tx.get(lref), os = await tx.get(oref);
+    if (ls.exists() && ls.data().status === "done" && ls.data().chosen.uid === me.uid) throw tradeErr("もう交換が成立しています。");
+    if (!os.exists() || os.data().status !== "open") throw tradeErr("このオファーはもう終わっています。");
+    base.counts[os.data().card] = (base.counts[os.data().card] || 0) + 1;
+    base.myOffers = base.myOffers.filter(x => x !== l.id);
+    tx.update(oref, { status: "returned" });
+  }, "オファーを取り消しました。カードが戻りました");
+}
+
 function ticketMsg(text, kind = "") { $("ticketMsg").textContent = text; $("ticketMsg").className = "ticket-msg " + kind; }
 
 async function redeem(e) {
@@ -1470,12 +1883,16 @@ $("zoom").onclick = () => { $("zoom").hidden = true; };
 addEventListener("keydown", e => {
   if (e.key !== "Escape") return;
   if (!$("zoom").hidden) $("zoom").hidden = true;
+  else if (!$("tradeDlg").hidden) closeTrade();
   else if (!$("admin").hidden) closeAdmin();
   else if (openSeries) closeBook();
 });
 // 埋め込み表示ではフォーム送信が止められるため、ボタンとEnterキーで直接処理する
 $("codeBtn").onclick = redeem;
 $("spellBtn").onclick = castSpell;
+$("listBtn").onclick = openListing;
+$("tradeClose").onclick = closeTrade;
+setInterval(() => { renderTrade(); settleTrades(); }, 60000);
 $("spellInput").addEventListener("keydown", e => { if (e.key === "Enter" && !e.isComposing) castSpell(); });
 $("codeInput").addEventListener("keydown", e => { if (e.key === "Enter" && !e.isComposing) redeem(e); });
 $("bookClose").onclick = closeBook;

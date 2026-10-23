@@ -38,6 +38,57 @@ service cloud.firestore {
       allow read: if signedIn() && request.auth.uid == uid;
     }
 
+    // 交換所の出品。出品者がカードを1枚預けて出す。3日で終わり、終わったらカードは持ち主に戻る。
+    // 書けるのは出品者だけで、できるのは「成立(done)」か「終了(closed)」にすることだけ
+    match /listings/{id} {
+      function live(l) {
+        return l.status == 'open' && request.time < l.createdAt + duration.value(3, 'd');
+      }
+      function offerOpen(uid, card) {
+        let o = get(/databases/$(database)/documents/listings/$(id)/offers/$(uid)).data;
+        return o.status == 'open' && o.card == card;
+      }
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.status == 'open'
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.card is string
+        && request.resource.data.want is list && request.resource.data.want.size() <= 5
+        && request.resource.data.note is string && request.resource.data.note.size() <= 30
+        && request.resource.data.chosen == null;
+      allow update: if signedIn() && resource.data.uid == request.auth.uid
+        && resource.data.status == 'open'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'chosen', 'closedAt'])
+        && (request.resource.data.status == 'closed'
+          || (request.resource.data.status == 'done' && live(resource.data)
+            && offerOpen(request.resource.data.chosen.uid, request.resource.data.chosen.card)));
+
+      // 出品へのオファー。オファーした人がカードを1枚預ける。書けるのはオファーした本人だけ。
+      // returned: 取り消し・選ばれなかった・期限切れでカードを戻した / received: 選ばれて出品のカードを受け取った
+      match /offers/{ouid} {
+        function listing() {
+          return get(/databases/$(database)/documents/listings/$(id)).data;
+        }
+        function chosenMe() {
+          return listing().status == 'done' && listing().chosen.uid == ouid;
+        }
+        allow read: if signedIn();
+        allow create: if signedIn() && ouid == request.auth.uid
+          && request.resource.data.uid == ouid
+          && request.resource.data.status == 'open'
+          && request.resource.data.card is string
+          && live(listing()) && listing().uid != ouid;
+        allow update: if signedIn() && ouid == request.auth.uid
+          && request.resource.data.uid == ouid
+          && ((resource.data.status == 'open' && request.resource.data.card == resource.data.card
+              && ((request.resource.data.status == 'returned' && !chosenMe())
+                || (request.resource.data.status == 'received' && chosenMe())))
+            || (resource.data.status == 'returned' && request.resource.data.status == 'open'
+              && request.resource.data.card is string && live(listing())));
+      }
+    }
+
     // 使い終わった復活の呪文(段階6で使う)。作るだけで、書き換えも削除もできない
     match /spells/{id} {
       allow read: if signedIn();
