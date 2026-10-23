@@ -667,7 +667,7 @@ const FIREBASE_CONFIG = {
 const FIREBASE_SDK = "https://www.gstatic.com/firebasejs/12.19.0/";
 let fb = null, auth = null, db = null;
 let me = null; // { uid, name, key }
-let playerRef = null, stopPlayer = null;
+let playerRef = null, stopPlayer = null, stopAdmin = null;
 const freshState = () => ({ lastDate: null, streak: 0, total: 0, counts: {}, history: [] });
 
 // 名前のキー: 全角半角・大文字小文字・前後と連続の空白の違いをなくす。同じキーの名前は同じ人
@@ -725,7 +725,9 @@ async function enter(user) {
       if (s.metadata.hasPendingWrites || !s.exists() || busy) return;
       useRemote(s.data()); render();
     }, () => {});
-    fb.getDoc(fb.doc(db, "admins", user.uid)).then(a => { $("adminBtn").hidden = !a.exists(); }, () => {});
+    // 管理者の印は見張っておき、あとから付けても開き直さずにボタンが出るようにする
+    stopAdmin = fb.onSnapshot(fb.doc(db, "admins", user.uid), a => { $("adminBtn").hidden = !a.exists(); },
+      e => showError("管理者の確認ができませんでした: " + (e && e.code || e)));
   } catch (e) {
     showError(e && (e.code || e.message) || e);
     loginMsg("記録を読み込めませんでした。ページを開き直してください。", "err");
@@ -747,7 +749,8 @@ function useRemote(d) {
 }
 function leave() {
   if (stopPlayer) stopPlayer();
-  stopPlayer = null; playerRef = null; me = null; loginReady = false;
+  if (stopAdmin) stopAdmin();
+  stopPlayer = stopAdmin = null; playerRef = null; me = null; loginReady = false;
   state = freshState();
   $("adminBtn").hidden = true; $("logoutBtn").hidden = true; $("whoNote").textContent = "";
   render();
