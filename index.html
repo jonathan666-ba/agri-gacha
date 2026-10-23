@@ -177,6 +177,8 @@ h1 { display: flex; align-items: center; gap: 14px; }
 .who .note { margin: 0; }
 .spell-in { border-top: 0; padding-top: 0; }
 /* 交換所: 出品の一覧。各出品は 画像＋中身 の横並び */
+#trade { background: var(--night-2); border: 1.5px solid var(--line); border-radius: 18px; padding: 20px 16px; }
+#spellPart > p { margin: 0 0 14px; color: var(--muted); font-size: 13px; }
 .trade-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-bottom: 16px; }
 .trade-bar .note { margin: 0; }
 .trade-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 16px; }
@@ -247,7 +249,7 @@ button.chip:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; 
 
 /* レア度ごとの演出: R は少し派手、SR は派手、SSR はゲキアツ */
 .flash.white { background: #fff; } .flash.blue { background: #8fb8ff; } .flash.purple { background: #e88cff; } .flash.gold { background: #ffd36b; }
-.slot { z-index: 5; }
+.slot { z-index: 5; overflow-x: clip; } /* カードの光(aura)で横にはみ出してスクロールしないように */
 .card3d { isolation: isolate; }
 .card3d.instant .flipper { transition: none; }
 .aura { position: absolute; inset: -32%; border-radius: 50%; z-index: -1; pointer-events: none; opacity: 0; background: radial-gradient(closest-side, var(--ac, transparent), transparent); transition: opacity .4s; }
@@ -428,18 +430,9 @@ button.chip:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; 
     </div>
   </section>
 
-  <section class="binder" id="trade">
-    <h2>交換所</h2>
-    <p>2枚以上持っているカードを出品して、ほかの人のカードと交換できます。出品は3日で終わり、終わるとカードは戻ってきます。</p>
-    <div class="trade-bar">
-      <button class="pull alt" id="listBtn" type="button">カードを出品する</button>
-      <span class="note" id="tradeNote"></span>
-    </div>
-    <div class="trade-list" id="tradeList"></div>
-  </section>
-
-  <section class="binder">
+  <section class="binder" id="spellSec">
     <h2>復活の呪文</h2>
+    <div id="spellPart">
     <p>前のページ（claude.ai）で書き写した「ふっかつのじゅもん」を入れると、そのときのカードとチケットを受け取れます。今のカードに足されます。1つの呪文は1回だけ使えます。</p>
     <div class="ticket spell-in">
       <label for="spellInput">FUKKATSU NO JUMON ・ ふっかつのじゅもん</label>
@@ -448,6 +441,7 @@ button.chip:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; 
         <button type="button" id="spellBtn">となえる</button>
       </div>
       <p class="ticket-msg" id="spellMsg" aria-live="polite">空白やカタカナが混ざっていても大丈夫です。</p>
+    </div>
     </div>
   </section>
 
@@ -458,6 +452,16 @@ button.chip:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; 
     <p class="note err-line" id="errLine" hidden></p>
   </section>
 
+  <section class="binder" id="trade">
+    <h2>交換所</h2>
+    <p>2枚以上持っているカードを出品して、ほかの人のカードと交換できます。出品は3日で終わり、終わるとカードは戻ってきます。</p>
+    <div class="trade-bar">
+      <button class="pull alt" id="listBtn" type="button">カードを出品する</button>
+      <span class="note" id="tradeNote"></span>
+    </div>
+    <div class="trade-list" id="tradeList"></div>
+  </section>
+
   <section class="binder" id="links">
     <h2>オススメリンク</h2>
     <p>新しいタブで開きます。</p>
@@ -465,6 +469,7 @@ button.chip:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; 
   </section>
   <div class="foot who">
     <span class="note" id="whoNote"></span>
+    <button class="reset-btn" id="spellOpen" type="button" hidden>復活の呪文</button>
     <button class="reset-btn" id="logoutBtn" type="button" hidden>ログアウト</button>
     <button class="reset-btn" id="adminBtn" type="button" hidden>管理者メニュー</button>
   </div>
@@ -499,6 +504,16 @@ button.chip:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; 
       <button class="pull" id="admSave" type="button">保存する</button>
       <span class="note" id="admMsg" aria-live="polite"></span>
     </div>
+  </div>
+</div>
+
+<div class="book" id="spellDlg" hidden role="dialog" aria-modal="true" aria-labelledby="spellDlgTitle">
+  <div class="book-inner">
+    <div class="book-head">
+      <button class="back-btn" id="spellDlgClose" type="button">← もどる</button>
+      <h2 id="spellDlgTitle">復活の呪文</h2>
+    </div>
+    <div id="spellDlgBody"></div>
   </div>
 </div>
 
@@ -811,6 +826,9 @@ async function enter(user) {
   $("logoutBtn").hidden = false;
   $("saveNote").textContent = "記録はあなたのアカウント（名前と合言葉）に保存されています。";
   watchTrade();
+  if (!state.spellUsed) fb.getDocs(fb.query(fb.collection(db, "spells"), fb.where("uid", "==", me.uid), fb.limit(1))).then(q => {
+    if (!q.empty && me && !state.spellUsed) { state.spellUsed = true; save(); render(); }
+  }, () => {});
   if (pendingName) { pendingName = null; closeCover(); }
   else { $("welcomeName").textContent = me.name; showCover("welcome"); }
   loginReady = true; checkLogin(); render();
@@ -980,6 +998,13 @@ function render() {
   $("ticketLeft").textContent = "×" + tk;
   $("countdown").hidden = !done;
   renderTrade();
+  // 復活の呪文: 1回使うまでは図鑑の下に出し、使ったあとはページの一番下のボタンから開く
+  const used = !!state.spellUsed;
+  $("spellSec").hidden = used || !me;
+  $("spellOpen").hidden = !used || !me;
+  const home = used ? $("spellDlgBody") : $("spellSec");
+  if ($("spellPart").parentNode !== home) home.append($("spellPart"));
+  if (!used || !me) $("spellDlg").hidden = true;
   if (done && !busy && state.history.length && !$("card3d").classList.contains("open")) showCard(byId[state.history[state.history.length - 1].id], false, "TODAY'S CARD");
 }
 
@@ -1392,6 +1417,7 @@ function mergeSpell(base, sp) {
   base.total = (base.total || 0) + sp.total;
   base.tickets = (base.tickets || 0) + sp.tickets;
   base.redeemed = [...new Set([...(base.redeemed || []), ...sp.redeemed])];
+  base.spellUsed = true;
   const run = sp.lastLogin === today() ? sp.loginStreak : sp.lastLogin === yesterday() ? sp.loginStreak + 1 : 0;
   if (base.lastLogin === today() && run > (base.loginStreak || 0)) base.loginStreak = run;
   return base;
@@ -1884,6 +1910,7 @@ addEventListener("keydown", e => {
   if (e.key !== "Escape") return;
   if (!$("zoom").hidden) $("zoom").hidden = true;
   else if (!$("tradeDlg").hidden) closeTrade();
+  else if (!$("spellDlg").hidden) closeSpellDlg();
   else if (!$("admin").hidden) closeAdmin();
   else if (openSeries) closeBook();
 });
@@ -1891,6 +1918,9 @@ addEventListener("keydown", e => {
 $("codeBtn").onclick = redeem;
 $("spellBtn").onclick = castSpell;
 $("listBtn").onclick = openListing;
+$("spellOpen").onclick = () => { spellMsg("空白やカタカナが混ざっていても大丈夫です。"); $("spellDlg").hidden = false; $("spellDlg").scrollTop = 0; $("spellInput").focus(); };
+function closeSpellDlg() { $("spellDlg").hidden = true; $("spellOpen").focus(); }
+$("spellDlgClose").onclick = closeSpellDlg;
 $("tradeClose").onclick = closeTrade;
 setInterval(() => { renderTrade(); settleTrades(); }, 60000);
 $("spellInput").addEventListener("keydown", e => { if (e.key === "Enter" && !e.isComposing) castSpell(); });
