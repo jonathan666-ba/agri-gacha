@@ -176,6 +176,29 @@ h1 { display: flex; align-items: center; gap: 14px; }
 .who { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
 .who .note { margin: 0; }
 .spell-in { border-top: 0; padding-top: 0; }
+/* 特殊スキルガチャチケットのボタン(紫) */
+.pull.skill { color: #2a1236; background: linear-gradient(180deg, #f6dcff, var(--sr)); box-shadow: 0 6px 0 #8a3fa0, 0 12px 30px rgba(232,140,255,.35); }
+.pull.skill:active:not(:disabled) { box-shadow: 0 2px 0 #8a3fa0, 0 6px 16px rgba(232,140,255,.3); }
+.sealed.ticket-only { color: var(--sr); border-color: var(--sr); }
+/* 演出(連続ログイン・コンプリート): 画面いっぱいに出して、タップか数秒で閉じる */
+.fx { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; overflow-y: auto; background: radial-gradient(80% 60% at 50% 45%, rgba(60,40,110,.97), rgba(8,6,18,.98)); padding: 24px max(16px, env(safe-area-inset-right, 0px)) 24px max(16px, env(safe-area-inset-left, 0px)); text-align: center; cursor: pointer; animation: fxin .3s ease-out; }
+@keyframes fxin { from { opacity: 0; } }
+.fx-inner { display: grid; gap: 16px; justify-items: center; max-width: 560px; }
+.fx-cap { font-family: var(--mono); font-size: 13px; letter-spacing: .3em; color: var(--muted); }
+.fx-big { margin: 0; font-family: var(--display); font-weight: 400; font-size: clamp(30px, 9vw, 52px); line-height: 1.15; color: var(--ssr); text-shadow: 0 0 10px #fff, 0 0 30px rgba(255,211,107,.9), 0 0 60px rgba(255,156,194,.7); animation: fxpop .6s cubic-bezier(.2,1.5,.4,1) both; }
+.fx-big small { display: block; font-size: .45em; color: var(--ink); text-shadow: none; }
+.fx-days { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.fx-days i { width: 38px; height: 38px; border-radius: 50%; border: 2px solid var(--line); display: grid; place-items: center; font-style: normal; font-family: var(--mono); font-size: 13px; color: var(--muted); }
+.fx-days i.bonus { border-style: dashed; border-color: var(--ssr); }
+.fx-days i.on { background: var(--ssr); color: #2e2208; border: 2px solid var(--ssr); animation: fxpop .45s cubic-bezier(.2,1.5,.4,1) both; animation-delay: calc(var(--k) * .12s + .3s); }
+.fx-days i.today { background: var(--accent); border-color: #fff; color: #2a1530; box-shadow: 0 0 18px var(--accent); }
+.fx-cards { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
+.fx-cards img { width: 46px; aspect-ratio: 256 / 395; object-fit: cover; border-radius: 4px; box-shadow: 0 0 12px rgba(255,211,107,.6); animation: fxpop .45s cubic-bezier(.2,1.5,.4,1) both; animation-delay: calc(var(--k) * .07s + .3s); }
+.fx-gift { font-family: var(--display); font-weight: 400; font-size: 16px; color: #2e2208; background: linear-gradient(180deg, #fff1c4, var(--ssr)); border-radius: 999px; padding: 6px 18px; animation: fxpop .5s cubic-bezier(.2,1.5,.4,1) both 1s; }
+.fx-gift.skill { color: #2a1236; background: linear-gradient(180deg, #f6dcff, var(--sr)); }
+.fx-note { font-size: 13px; color: var(--muted); margin: 0; }
+@keyframes fxpop { from { transform: scale(2.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .fx, .fx-big, .fx-days i.on, .fx-cards img, .fx-gift { animation: none !important; } }
 /* 交換所: 出品の一覧。各出品は 画像＋中身 の横並び */
 #trade { background: var(--night-2); border: 1.5px solid var(--line); border-radius: 18px; padding: 20px 16px; }
 #spellPart > p { margin: 0 0 14px; color: var(--muted); font-size: 13px; }
@@ -366,6 +389,7 @@ button.chip:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; 
 <div class="blackout" id="blackout" aria-hidden="true"></div>
 <div class="flash" id="flash"></div>
 <div class="toast" id="toast" role="status" hidden></div>
+<div class="fx" id="fx" hidden role="dialog" aria-modal="true" aria-live="assertive"></div>
 
 <div class="wrap">
   <header>
@@ -404,6 +428,7 @@ button.chip:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; 
       <div class="btns">
         <button class="pull" id="pullBtn" type="button">ガチャを引く</button>
         <button class="pull alt" id="ticketPullBtn" type="button" hidden>チケットで引く <span class="left" id="ticketLeft">×0</span></button>
+        <button class="pull skill" id="skillPullBtn" type="button" hidden>スキルチケットで引く <span class="left" id="skillLeft">×0</span></button>
       </div>
       <div class="countdown" id="countdown" hidden>次のガチャまで <b id="cd">--:--:--</b></div>
       <div class="rates" id="rates" aria-label="排出率">
@@ -426,7 +451,7 @@ button.chip:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; 
     <div class="shelf" id="shelf"></div>
     <div class="reset-row">
       <button class="reset-btn" id="resetBtn" type="button">図鑑をリセット</button>
-      <span class="note" id="resetNote">集めたカード、引いた記録、使ったキーワード、手持ちのチケットを消します。今日のガチャはそのままです。</span>
+      <span class="note" id="resetNote">集めたカード、引いた記録、使ったキーワード、手持ちのチケット（スキルチケットも）を消します。今日のガチャはそのままです。</span>
     </div>
   </section>
 
@@ -587,8 +612,8 @@ const SERIES = [
   // unlock: (state) => true になったシリーズだけがガチャに入る。条件は未定なので今は常に閉じている
   // hidden: 封印中。ガチャにも図鑑にも出さない(カードのデータと集めた記録は残す)
   { id: "treasure", name: "宝箱", back: "back_cow_v2", hidden: true },
-  // 宝箱A〜Eをすべて集めると解放される
-  { id: "skill", name: "特殊スキル", back: "back", unlock: st => !boxesSealed() && BOXES.every(id => st.counts[id]),
+  // 宝箱A〜Eをすべて集めると解放される(宝箱は封印中)。ticketOnly: 特殊スキルガチャチケットで引ける
+  { id: "skill", name: "特殊スキル", back: "back", ticketOnly: true, unlock: st => !boxesSealed() && BOXES.every(id => st.counts[id]),
     get hint() { return boxesSealed() ? "解放条件は準備中です" : `宝箱A〜Eをすべて集めると解放されます（あと${BOXES.filter(id => !state.counts[id]).length}種類）`; } },
 ];
 const CARDS = [
@@ -733,6 +758,16 @@ function today(d = new Date()) {
 }
 function yesterday() { const d = new Date(); d.setDate(d.getDate() - 1); return today(d); }
 
+// 特殊スキルシリーズだけから引く。レア度の割合は普段と同じ比で、出ないレア度の分は按分する
+function rollSkill() {
+  const pool = CARDS.filter(c => c.s === "skill");
+  const rars = Object.keys(RATES).filter(r => pool.some(c => c.r === r));
+  const sum = rars.reduce((a, r) => a + RATES[r], 0);
+  let x = Math.random() * sum, rar = rars[rars.length - 1];
+  for (const r of rars) { if (x < RATES[r]) { rar = r; break; } x -= RATES[r]; }
+  const cands = pool.filter(c => c.r === rar);
+  return cands[Math.floor(Math.random() * cands.length)];
+}
 function rollCard() {
   const { pool, rates } = currentRates();
   let x = Math.random(), rar = rates[rates.length - 1][0];
@@ -832,6 +867,8 @@ async function enter(user) {
   if (pendingName) { pendingName = null; closeCover(); }
   else { $("welcomeName").textContent = me.name; showCover("welcome"); }
   loginReady = true; checkLogin(); render();
+  const rewarded = grantComplete(state);
+  if (rewarded.length) { save(); celebrateComplete(completedSeries(state).filter(id => !rewarded.includes(id)), rewarded); }
 }
 // 読み込んだ記録を state にする(名前と時刻は state に入れない)
 function useRemote(d) {
@@ -844,6 +881,7 @@ function leave() {
   if (stopAdmin) stopAdmin();
   stopPlayer = stopAdmin = null;
   stopTrade(); playerRef = null; me = null; loginReady = false;
+  fxQueue.length = 0; closeFx();
   state = freshState();
   $("adminBtn").hidden = true; $("logoutBtn").hidden = true; $("whoNote").textContent = "";
   render();
@@ -937,7 +975,7 @@ function render() {
   $("sOwned").textContent = `${owned}/${CARDS.length}`;
   $("sTotal").textContent = state.total;
   // 今引ける回数 = 今日のガチャ(未使用なら1) + 手持ちのチケット
-  $("sDraws").textContent = (state.lastDate === today() ? 0 : 1) + (state.tickets || 0);
+  $("sDraws").textContent = (state.lastDate === today() ? 0 : 1) + (state.tickets || 0) + (state.skillTickets || 0);
   $("sStreak").textContent = state.lastLogin === today() || state.lastLogin === yesterday() ? (state.loginStreak || 0) : 0;
   const nx = nextBonus(state.lastLogin === today() ? state.loginStreak || 0 : 0);
   $("loginNote").textContent = `連続ログイン ${state.lastLogin === today() ? state.loginStreak || 0 : 0}日目 ・ 次のごほうび：${nx.day}日目にチケット+${nx.n}`;
@@ -950,7 +988,7 @@ function render() {
     sec.className = "spine";
     sec.onclick = () => openBook(s.id);
     const open = isOpen(s);
-    sec.innerHTML = `<img src="cards/${s.back}.jpg" alt=""><div class="series-head"><h3>${s.name}シリーズ</h3><span class="cnt">${got}/${list.length}</span>${got === list.length ? '<span class="complete">COMPLETE</span>' : ""}${open ? "" : '<span class="sealed">未解放</span>'}</div><span class="go" aria-hidden="true">›</span>`;
+    sec.innerHTML = `<img src="cards/${s.back}.jpg" alt=""><div class="series-head"><h3>${s.name}シリーズ</h3><span class="cnt">${got}/${list.length}</span>${got === list.length ? '<span class="complete">COMPLETE</span>' : ""}${open ? "" : s.ticketOnly ? '<span class="sealed ticket-only">チケット専用</span>' : '<span class="sealed">未解放</span>'}</div><span class="go" aria-hidden="true">›</span>`;
     return sec;
   }));
 
@@ -961,7 +999,9 @@ function render() {
     const got = list.filter(c => state.counts[c.id]).length;
     $("bookTitle").textContent = `${s.name}シリーズ`;
     $("bookCount").textContent = `${got}/${list.length}${got === list.length ? " COMPLETE" : ""}`;
-    $("bookNote").textContent = isOpen(s) ? "手に入れたカードはタップで拡大できます。" : `未解放のシリーズです。${s.hint || ""}`;
+    $("bookNote").textContent = isOpen(s) ? "手に入れたカードはタップで拡大できます。"
+      : s.ticketOnly ? "特殊スキルガチャチケットで引けるシリーズです。植物・昆虫・牛・礼文島の各シリーズをコンプリートすると、チケットが1枚ずつもらえます。"
+      : `未解放のシリーズです。${s.hint || ""}`;
     $("bookGrid").replaceChildren(...list.map(cell));
   }
 
@@ -985,7 +1025,7 @@ function render() {
   const hist = state.history.slice(-10).reverse();
   $("log").replaceChildren(...(hist.length ? hist.map(h => {
     const li = document.createElement("li"); const c = byId[h.id];
-    li.innerHTML = `<span>${h.date}</span><span class="badge ${c.r}">${c.r}</span><span>${c.name}</span>${h.via ? `<span class="via">${h.via === "trade" ? "交換" : "チケット"}</span>` : ""}`;
+    li.innerHTML = `<span>${h.date}</span><span class="badge ${c.r}">${c.r}</span><span>${c.name}</span>${h.via ? `<span class="via">${{ trade: "交換", skill: "スキル" }[h.via] || "チケット"}</span>` : ""}`;
     return li;
   }) : [Object.assign(document.createElement("li"), { textContent: "まだ1枚も引いていません。" })]));
 
@@ -996,6 +1036,10 @@ function render() {
   $("ticketPullBtn").hidden = tk <= 0;
   $("ticketPullBtn").disabled = busy;
   $("ticketLeft").textContent = "×" + tk;
+  const sk = state.skillTickets || 0;
+  $("skillPullBtn").hidden = sk <= 0;
+  $("skillPullBtn").disabled = busy;
+  $("skillLeft").textContent = "×" + sk;
   $("countdown").hidden = !done;
   renderTrade();
   // 復活の呪文: 1回使うまでは図鑑の下に出し、使ったあとはページの一番下のボタンから開く
@@ -1019,15 +1063,19 @@ function showCard(c, isNew, label) {
     <p class="result-text">${c.eff}<br><span style="font-family:var(--mono);font-size:12px">${seriesOf[c.s].name}シリーズ ・ ${c.en} ・ 所持 ${state.counts[c.id]}枚</span></p>`;
 }
 
-// useTicket: true ならチケットを1枚使って引く(毎日のガチャとは別枠)
-async function pull(useTicket) {
+// mode: "daily" は毎日のガチャ、"ticket" はチケット1枚、"skill" は特殊スキルガチャチケット1枚で引く
+async function pull(mode) {
   if (busy) return;
-  if (useTicket ? !(state.tickets > 0) : state.lastDate === today()) return;
+  const useTicket = mode !== "daily";
+  if (mode === "ticket" ? !(state.tickets > 0) : mode === "skill" ? !(state.skillTickets > 0) : state.lastDate === today()) return;
   busy = true; render();
-  const c = rollCard();
+  const c = mode === "skill" ? rollSkill() : rollCard();
   const isNew = !state.counts[c.id];
-  if (useTicket) {
+  const doneBefore = completedSeries(state);
+  if (mode === "ticket") {
     state.tickets -= 1;
+  } else if (mode === "skill") {
+    state.skillTickets -= 1;
   } else {
     state.streak = state.lastDate === yesterday() ? state.streak + 1 : 1;
     state.lastDate = today();
@@ -1037,8 +1085,9 @@ async function pull(useTicket) {
   state.counts[c.id] = (state.counts[c.id] || 0) + 1;
   if (c.ticket) state.tickets = (state.tickets || 0) + c.ticket;
   const unlocked = !skillWasOpen && isOpen(seriesOf.skill);
-  state.history.push(useTicket ? { id: c.id, date: today(), via: "ticket" } : { id: c.id, date: today() });
+  state.history.push(useTicket ? { id: c.id, date: today(), via: mode } : { id: c.id, date: today() });
   state.history = state.history.slice(-60);
+  const rewarded = grantComplete(state);
   save();
 
   const card = $("card3d");
@@ -1053,8 +1102,9 @@ async function pull(useTicket) {
   const say = html => { $("resultBox").innerHTML = `<h2 class="result-name">${html}</h2>`; };
   await revealCard(card, c, say);
   await unveil(card, c.r, say);
-  showCard(c, isNew, useTicket ? "TICKET GET!" : "GET!");
+  showCard(c, isNew, mode === "skill" ? "SKILL GET!" : useTicket ? "TICKET GET!" : "GET!");
   busy = false; render();
+  celebrateComplete(doneBefore, rewarded);
   const news = [c.ticket && `宝箱からチケット+${c.ticket}枚！`, unlocked && "宝箱A〜Eがそろった！ 特殊スキルシリーズが解放されました"].filter(Boolean);
   if (news.length) toast(news.join(" "));
 }
@@ -1434,7 +1484,8 @@ async function castSpell() {
   if (!sp) return spellMsg("じゅもんが ちがいます。1文字ずつ見直してください。", "err");
   busy = true; $("spellBtn").disabled = true; render();
   spellMsg("となえています…");
-  let next = null;
+  let next = null, rewarded = [];
+  const doneBefore = completedSeries(state);
   try {
     const usedRef = fb.doc(db, "spells", await spellPrint(spellChars($("spellInput").value)));
     await fb.runTransaction(db, async tx => {
@@ -1443,6 +1494,7 @@ async function castSpell() {
       const base = JSON.parse(JSON.stringify(cur.exists() ? cur.data() : state));
       delete base.name; delete base.nameKey; delete base.updatedAt;
       next = mergeSpell(Object.assign(freshState(), base), sp);
+      rewarded = grantComplete(next);
       tx.set(usedRef, { uid: me.uid, name: me.name, at: fb.serverTimestamp() });
       tx.set(playerRef, { ...JSON.parse(JSON.stringify(next)), name: me.name, nameKey: me.key, updatedAt: fb.serverTimestamp() });
     });
@@ -1451,11 +1503,75 @@ async function castSpell() {
     $("spellInput").value = "";
     spellMsg(`呪文が通じました！ カード${cards}枚とチケット${sp.tickets}枚を受け取りました。`, "ok");
     toast(`ふっかつのじゅもんが 通じた！ カード${cards}枚・チケット${sp.tickets}枚`);
+    celebrateComplete(doneBefore, rewarded);
   } catch (e) {
     if (e.code === "spell/used") spellMsg("この呪文はもう使われています。1つの呪文は1回だけ使えます。", "err");
     else { spellMsg("呪文を使えませんでした。通信のよいところで、もう一度試してください。", "err"); showError(e && (e.code || e.message) || e); }
   }
   busy = false; $("spellBtn").disabled = false; render();
+}
+
+/* ---------- コンプリートと演出 ---------- */
+// コンプリートすると特殊スキルガチャチケットが1枚もらえるシリーズ(1シリーズにつき1回)
+const REWARD_SERIES = ["plant", "insect", "cow", "rebun"];
+const seriesDone = (st, id) => CARDS.filter(c => c.s === id).every(c => (st.counts || {})[c.id] > 0);
+const completedSeries = st => SERIES.filter(s => seriesDone(st, s.id)).map(s => s.id);
+// まだもらっていないコンプリートのごほうびを渡す。渡したシリーズを返す
+function grantComplete(base) {
+  base.completeRewards = base.completeRewards || [];
+  const got = REWARD_SERIES.filter(id => !base.completeRewards.includes(id) && seriesDone(base, id));
+  for (const id of got) { base.completeRewards.push(id); base.skillTickets = (base.skillTickets || 0) + 1; }
+  return got;
+}
+// 前はそろっていなかったシリーズと、ごほうびを渡したシリーズの演出を出す
+function celebrateComplete(before, rewarded) {
+  const now = completedSeries(state);
+  for (const id of now) if (!before.includes(id) || rewarded.includes(id)) celebrate({ kind: "complete", series: id, reward: rewarded.includes(id) });
+}
+
+// 演出は順番に1つずつ。表紙・ガチャの演出・ほかのダイアログが終わってから出す
+const fxQueue = [];
+function celebrate(item) { fxQueue.push(item); playFx(); }
+function playFx() {
+  clearTimeout(playFx.t);
+  if (!fxQueue.length || !$("fx").hidden) return;
+  if (!$("cover").hidden || busy) { playFx.t = setTimeout(playFx, 500); return; }
+  const it = fxQueue.shift(), box = el("div", "fx-inner");
+  if (it.kind === "login") {
+    const d = it.streak, from = Math.max(1, d - 6), days = el("div", "fx-days");
+    for (let k = 0; k < 7; k++) {
+      const n = from + k, i = el("i", (n <= d ? "on" : "") + (n === d ? " today" : "") + (loginBonus(n) ? " bonus" : ""), String(n));
+      i.style.setProperty("--k", k);
+      days.append(i);
+    }
+    const big = el("h2", "fx-big"); big.append(`${d}日目！`, el("small", "", "連続ログイン"));
+    box.append(el("div", "fx-cap", "LOGIN BONUS"), big, days);
+    if (it.n) box.append(el("div", "fx-gift", `ごほうび チケット+${it.n}枚`));
+    const nx = nextBonus(d);
+    box.append(el("p", "fx-note", `次のごほうび：${nx.day}日目にチケット+${nx.n}`));
+    if (it.n) { flash("gold"); rain(["#ffd36b", "#fff3c4", "#ff9cc2", "#ffffff"]); }
+  } else {
+    const s = seriesOf[it.series], cards = el("div", "fx-cards");
+    CARDS.filter(c => c.s === it.series).forEach((c, k) => {
+      const img = el("img"); img.src = `cards/${c.id}.jpg`; img.alt = ""; img.style.setProperty("--k", k);
+      cards.append(img);
+    });
+    const big = el("h2", "fx-big"); big.append("COMPLETE!", el("small", "", `${s.name}シリーズ`));
+    box.append(el("div", "fx-cap", "SERIES COMPLETE"), big, cards);
+    if (it.reward) box.append(el("div", "fx-gift skill", "特殊スキルガチャチケット +1枚"), el("p", "fx-note", "「スキルチケットで引く」で、特殊スキルのカードが引けます。"));
+    flash("gold"); rain(["#ffd36b", "#ff9cc2", "#9fd0ff", "#ffffff", "#e88cff"]);
+  }
+  box.append(el("p", "fx-note", "タップで閉じる"));
+  $("fx").replaceChildren(box);
+  $("fx").setAttribute("aria-label", box.textContent);
+  $("fx").hidden = false;
+  playFx.close = setTimeout(closeFx, it.kind === "login" && !it.n ? 3500 : 6000);
+}
+function closeFx() {
+  clearTimeout(playFx.close);
+  if ($("fx").hidden) return;
+  $("fx").hidden = true;
+  setTimeout(playFx, 300);
 }
 
 /* ---------- 交換所: 出品 → オファー → 出品者が選んで成立 ----------
@@ -1522,17 +1638,20 @@ function offerToast() {
 
 // 自分の記録を読み直して、fn で書き換えて書き戻す。fn の中では読む(tx.get)のを書く(tx.set など)より先にする
 async function playerTx(fn) {
-  let next = null;
+  let next = null, rewarded = [];
+  const doneBefore = completedSeries(state);
   await fb.runTransaction(db, async tx => {
     const cur = await tx.get(playerRef);
     const base = Object.assign(freshState(), JSON.parse(JSON.stringify(cur.exists() ? cur.data() : state)));
     delete base.name; delete base.nameKey; delete base.updatedAt;
     base.myListings = base.myListings || []; base.myOffers = base.myOffers || [];
     await fn(tx, base);
+    rewarded = grantComplete(base);
     tx.set(playerRef, { ...JSON.parse(JSON.stringify(base)), name: me.name, nameKey: me.key, updatedAt: fb.serverTimestamp() });
     next = base;
   });
   state = next;
+  celebrateComplete(doneBefore, rewarded);
 }
 const tradeErr = msg => Object.assign(new Error(msg), { trade: true });
 function gain(base, id) {
@@ -1846,7 +1965,7 @@ function checkLogin() {
   const n = loginBonus(state.loginStreak);
   if (n) state.tickets = (state.tickets || 0) + n;
   save(); render();
-  if (n) toast(`連続ログイン${state.loginStreak}日目！ ごほうびのチケット+${n}枚`);
+  celebrate({ kind: "login", streak: state.loginStreak, n });
 }
 function toast(msg) {
   $("toast").textContent = msg; $("toast").hidden = false;
@@ -1884,7 +2003,7 @@ function stars() {
   }
 }
 
-$("pullBtn").onclick = () => pull(false);
+$("pullBtn").onclick = () => pull("daily");
 $("toast").onclick = () => { $("toast").hidden = true; };
 // 図鑑のリセットは2回押しで確定(1回目から4秒で元に戻る)
 let resetArm = null;
@@ -1900,15 +2019,19 @@ $("resetBtn").onclick = () => {
   disarmReset();
   state.counts = {}; state.history = []; state.total = 0;
   state.redeemed = []; state.usedCodes = []; state.tickets = 0;
+  state.skillTickets = 0; state.completeRewards = [];
   save(); render();
   ticketMsg("キーワードを入れるとチケットがもらえます。チケット1枚でカードを1枚引けます。");
   $("resetNote").textContent = "図鑑をリセットしました。チケットは0枚になり、キーワードをもう一度使えます。";
 };
-$("ticketPullBtn").onclick = () => pull(true);
+$("ticketPullBtn").onclick = () => pull("ticket");
+$("skillPullBtn").onclick = () => pull("skill");
+$("fx").onclick = closeFx;
 $("zoom").onclick = () => { $("zoom").hidden = true; };
 addEventListener("keydown", e => {
   if (e.key !== "Escape") return;
-  if (!$("zoom").hidden) $("zoom").hidden = true;
+  if (!$("fx").hidden) closeFx();
+  else if (!$("zoom").hidden) $("zoom").hidden = true;
   else if (!$("tradeDlg").hidden) closeTrade();
   else if (!$("spellDlg").hidden) closeSpellDlg();
   else if (!$("admin").hidden) closeAdmin();
