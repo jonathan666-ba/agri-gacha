@@ -179,7 +179,6 @@ h1 { display: flex; align-items: center; gap: 14px; }
 /* 特殊スキルガチャチケットのボタン(紫) */
 .pull.skill { color: #2a1236; background: linear-gradient(180deg, #f6dcff, var(--sr)); box-shadow: 0 6px 0 #8a3fa0, 0 12px 30px rgba(232,140,255,.35); }
 .pull.skill:active:not(:disabled) { box-shadow: 0 2px 0 #8a3fa0, 0 6px 16px rgba(232,140,255,.3); }
-.sealed.ticket-only { color: var(--sr); border-color: var(--sr); }
 /* 演出(連続ログイン・コンプリート): 画面いっぱいに出して、タップか数秒で閉じる */
 .fx { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; overflow-y: auto; background: radial-gradient(80% 60% at 50% 45%, rgba(60,40,110,.97), rgba(8,6,18,.98)); padding: 24px max(16px, env(safe-area-inset-right, 0px)) 24px max(16px, env(safe-area-inset-left, 0px)); text-align: center; cursor: pointer; animation: fxin .3s ease-out; }
 @keyframes fxin { from { opacity: 0; } }
@@ -612,8 +611,8 @@ const SERIES = [
   // unlock: (state) => true になったシリーズだけがガチャに入る。条件は未定なので今は常に閉じている
   // hidden: 封印中。ガチャにも図鑑にも出さない(カードのデータと集めた記録は残す)
   { id: "treasure", name: "宝箱", back: "back_cow_v2", hidden: true },
-  // 宝箱A〜Eをすべて集めると解放される(宝箱は封印中)。ticketOnly: 特殊スキルガチャチケットで引ける
-  { id: "skill", name: "特殊スキル", back: "back", ticketOnly: true, unlock: st => !boxesSealed() && BOXES.every(id => st.counts[id]),
+  // 宝箱A〜Eをすべて集めると解放される(宝箱は封印中)。特殊スキルガチャチケットでも引ける(取り方は画面では明かさない)
+  { id: "skill", name: "特殊スキル", back: "back", unlock: st => !boxesSealed() && BOXES.every(id => st.counts[id]),
     get hint() { return boxesSealed() ? "解放条件は準備中です" : `宝箱A〜Eをすべて集めると解放されます（あと${BOXES.filter(id => !state.counts[id]).length}種類）`; } },
 ];
 const CARDS = [
@@ -846,6 +845,8 @@ async function enter(user) {
     useRemote(d);
     stopPlayer = fb.onSnapshot(playerRef, s => {
       if (s.metadata.hasPendingWrites || !s.exists() || busy) return;
+      // 書く前の古い記録が遅れて届くことがあるので、書いた回数(rev)が手元より少ないものは使わない
+      if ((s.data().rev || 0) < (state.rev || 0)) return;
       useRemote(s.data()); render();
     }, () => {});
     // 管理者の印は見張っておき、あとから付けても開き直さずにボタンが出るようにする
@@ -866,7 +867,15 @@ async function enter(user) {
   }, () => {});
   if (pendingName) { pendingName = null; closeCover(); }
   else { $("welcomeName").textContent = me.name; showCover("welcome"); }
-  loginReady = true; checkLogin(); render();
+  loginReady = true;
+  // はじめて来た人(新しく登録した人・引っ越してきた人)に、アカウントごとに1回だけチケットを配る
+  if (!state.welcomeGift) {
+    state.welcomeGift = true;
+    state.tickets = (state.tickets || 0) + WELCOME_TICKETS;
+    save();
+    celebrate({ kind: "welcome" });
+  }
+  checkLogin(); render();
   const rewarded = grantComplete(state);
   if (rewarded.length) { save(); celebrateComplete(completedSeries(state).filter(id => !rewarded.includes(id)), rewarded); }
 }
@@ -889,6 +898,7 @@ function leave() {
 }
 async function save() {
   if (!playerRef || !me) return;
+  state.rev = (state.rev || 0) + 1;
   try {
     await fb.setDoc(playerRef, { ...JSON.parse(JSON.stringify(state)), name: me.name, nameKey: me.key, updatedAt: fb.serverTimestamp() });
     $("saveNote").textContent = "記録はあなたのアカウント（名前と合言葉）に保存されています。";
@@ -988,7 +998,7 @@ function render() {
     sec.className = "spine";
     sec.onclick = () => openBook(s.id);
     const open = isOpen(s);
-    sec.innerHTML = `<img src="cards/${s.back}.jpg" alt=""><div class="series-head"><h3>${s.name}シリーズ</h3><span class="cnt">${got}/${list.length}</span>${got === list.length ? '<span class="complete">COMPLETE</span>' : ""}${open ? "" : s.ticketOnly ? '<span class="sealed ticket-only">チケット専用</span>' : '<span class="sealed">未解放</span>'}</div><span class="go" aria-hidden="true">›</span>`;
+    sec.innerHTML = `<img src="cards/${s.back}.jpg" alt=""><div class="series-head"><h3>${s.name}シリーズ</h3><span class="cnt">${got}/${list.length}</span>${got === list.length ? '<span class="complete">COMPLETE</span>' : ""}${open ? "" : '<span class="sealed">未解放</span>'}</div><span class="go" aria-hidden="true">›</span>`;
     return sec;
   }));
 
@@ -999,9 +1009,7 @@ function render() {
     const got = list.filter(c => state.counts[c.id]).length;
     $("bookTitle").textContent = `${s.name}シリーズ`;
     $("bookCount").textContent = `${got}/${list.length}${got === list.length ? " COMPLETE" : ""}`;
-    $("bookNote").textContent = isOpen(s) ? "手に入れたカードはタップで拡大できます。"
-      : s.ticketOnly ? "特殊スキルガチャチケットで引けるシリーズです。植物・昆虫・牛・礼文島の各シリーズをコンプリートすると、チケットが1枚ずつもらえます。"
-      : `未解放のシリーズです。${s.hint || ""}`;
+    $("bookNote").textContent = isOpen(s) ? "手に入れたカードはタップで拡大できます。" : `未解放のシリーズです。${s.hint || ""}`;
     $("bookGrid").replaceChildren(...list.map(cell));
   }
 
@@ -1495,6 +1503,7 @@ async function castSpell() {
       delete base.name; delete base.nameKey; delete base.updatedAt;
       next = mergeSpell(Object.assign(freshState(), base), sp);
       rewarded = grantComplete(next);
+      next.rev = (next.rev || 0) + 1;
       tx.set(usedRef, { uid: me.uid, name: me.name, at: fb.serverTimestamp() });
       tx.set(playerRef, { ...JSON.parse(JSON.stringify(next)), name: me.name, nameKey: me.key, updatedAt: fb.serverTimestamp() });
     });
@@ -1514,6 +1523,7 @@ async function castSpell() {
 /* ---------- コンプリートと演出 ---------- */
 // コンプリートすると特殊スキルガチャチケットが1枚もらえるシリーズ(1シリーズにつき1回)
 const REWARD_SERIES = ["plant", "insect", "cow", "rebun"];
+const WELCOME_TICKETS = 10;
 const seriesDone = (st, id) => CARDS.filter(c => c.s === id).every(c => (st.counts || {})[c.id] > 0);
 const completedSeries = st => SERIES.filter(s => seriesDone(st, s.id)).map(s => s.id);
 // まだもらっていないコンプリートのごほうびを渡す。渡したシリーズを返す
@@ -1537,7 +1547,12 @@ function playFx() {
   if (!fxQueue.length || !$("fx").hidden) return;
   if (!$("cover").hidden || busy) { playFx.t = setTimeout(playFx, 500); return; }
   const it = fxQueue.shift(), box = el("div", "fx-inner");
-  if (it.kind === "login") {
+  if (it.kind === "welcome") {
+    const big = el("h2", "fx-big"); big.append("ようこそ！", el("small", "", "あぐり大学ガチャへ"));
+    box.append(el("div", "fx-cap", "WELCOME"), big, el("div", "fx-gift", `プレゼント チケット${WELCOME_TICKETS}枚`),
+      el("p", "fx-note", "「チケットで引く」で、好きなときにカードを引けます。"));
+    flash("gold"); rain(["#ffd36b", "#fff3c4", "#ff9cc2", "#9fd0ff", "#ffffff"]);
+  } else if (it.kind === "login") {
     const d = it.streak, from = Math.max(1, d - 6), days = el("div", "fx-days");
     for (let k = 0; k < 7; k++) {
       const n = from + k, i = el("i", (n <= d ? "on" : "") + (n === d ? " today" : "") + (loginBonus(n) ? " bonus" : ""), String(n));
@@ -1647,6 +1662,7 @@ async function playerTx(fn) {
     base.myListings = base.myListings || []; base.myOffers = base.myOffers || [];
     await fn(tx, base);
     rewarded = grantComplete(base);
+    base.rev = (base.rev || 0) + 1;
     tx.set(playerRef, { ...JSON.parse(JSON.stringify(base)), name: me.name, nameKey: me.key, updatedAt: fb.serverTimestamp() });
     next = base;
   });
