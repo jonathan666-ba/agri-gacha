@@ -193,6 +193,13 @@ h1 { display: flex; align-items: center; gap: 14px; }
 .fx-days i.today { background: var(--accent); border-color: #fff; color: #2a1530; box-shadow: 0 0 18px var(--accent); }
 .fx-cards { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
 .fx-cards img { width: 46px; aspect-ratio: 256 / 395; object-fit: cover; border-radius: 4px; box-shadow: 0 0 12px rgba(255,211,107,.6); animation: fxpop .45s cubic-bezier(.2,1.5,.4,1) both; animation-delay: calc(var(--k) * .07s + .3s); }
+.fx-big.rr-N { color: var(--n); text-shadow: 0 0 10px #fff, 0 0 30px rgba(159,217,196,.9); }
+.fx-big.rr-R { color: var(--r); text-shadow: 0 0 10px #fff, 0 0 30px rgba(143,184,255,.9); }
+.fx-big.rr-SR { color: var(--sr); text-shadow: 0 0 10px #fff, 0 0 30px rgba(232,140,255,.9); }
+.fx-big .badge { font-size: 14px; vertical-align: middle; }
+.fx-cards.rr-N img { box-shadow: 0 0 12px rgba(159,217,196,.7); }
+.fx-cards.rr-R img { box-shadow: 0 0 12px rgba(143,184,255,.7); }
+.fx-cards.rr-SR img { box-shadow: 0 0 12px rgba(232,140,255,.8); }
 .fx-gift { font-family: var(--display); font-weight: 400; font-size: 16px; color: #2e2208; background: linear-gradient(180deg, #fff1c4, var(--ssr)); border-radius: 999px; padding: 6px 18px; animation: fxpop .5s cubic-bezier(.2,1.5,.4,1) both 1s; }
 .fx-gift.skill { color: #2a1236; background: linear-gradient(180deg, #f6dcff, var(--sr)); }
 .fx-note { font-size: 13px; color: var(--muted); margin: 0; }
@@ -1521,11 +1528,16 @@ async function castSpell() {
 }
 
 /* ---------- コンプリートと演出 ---------- */
-// コンプリートすると特殊スキルガチャチケットが1枚もらえるシリーズ(1シリーズにつき1回)
-const REWARD_SERIES = ["plant", "insect", "cow", "rebun"];
+// コンプリートのまとまり。シリーズまるごと(id はシリーズの id)と、農作業シリーズのレア度ごと(id は "work-N" など)
+const RARITY_GROUPS = ["N", "R", "SR"].map(r => ({ id: `work-${r}`, s: "work", r }));
+const groupOf = id => RARITY_GROUPS.find(g => g.id === id) || { id, s: id };
+const groupCards = id => { const g = groupOf(id); return CARDS.filter(c => c.s === g.s && (!g.r || c.r === g.r)); };
+// コンプリートすると特殊スキルガチャチケットが1枚もらえるまとまり(1つにつき1回)
+const REWARD_SERIES = ["plant", "insect", "cow", "rebun", ...RARITY_GROUPS.map(g => g.id)];
 const WELCOME_TICKETS = 10;
-const seriesDone = (st, id) => CARDS.filter(c => c.s === id).every(c => (st.counts || {})[c.id] > 0);
-const completedSeries = st => SERIES.filter(s => seriesDone(st, s.id)).map(s => s.id);
+const seriesDone = (st, id) => groupCards(id).every(c => (st.counts || {})[c.id] > 0);
+// そろっているまとまり。レア度ごとを先に並べて、同時にそろったときはシリーズまるごとの演出をあとに出す
+const completedSeries = st => [...RARITY_GROUPS.map(g => g.id), ...SERIES.map(s => s.id)].filter(id => seriesDone(st, id));
 // まだもらっていないコンプリートのごほうびを渡す。渡したシリーズを返す
 function grantComplete(base) {
   base.completeRewards = base.completeRewards || [];
@@ -1566,15 +1578,20 @@ function playFx() {
     box.append(el("p", "fx-note", `次のごほうび：${nx.day}日目にチケット+${nx.n}`));
     if (it.n) { flash("gold"); rain(["#ffd36b", "#fff3c4", "#ff9cc2", "#ffffff"]); }
   } else {
-    const s = seriesOf[it.series], cards = el("div", "fx-cards");
-    CARDS.filter(c => c.s === it.series).forEach((c, k) => {
+    const g = groupOf(it.series), s = seriesOf[g.s], cards = el("div", "fx-cards");
+    groupCards(it.series).forEach((c, k) => {
       const img = el("img"); img.src = `cards/${c.id}.jpg`; img.alt = ""; img.style.setProperty("--k", k);
       cards.append(img);
     });
-    const big = el("h2", "fx-big"); big.append("COMPLETE!", el("small", "", `${s.name}シリーズ`));
-    box.append(el("div", "fx-cap", "SERIES COMPLETE"), big, cards);
+    const big = el("h2", "fx-big" + (g.r ? " rr-" + g.r : "")), sub = el("small", "", `${s.name}シリーズ`);
+    if (g.r) sub.append(" ", el("span", `badge ${g.r}`, g.r));
+    big.append("COMPLETE!", sub);
+    box.append(el("div", "fx-cap", g.r ? `${g.r} COMPLETE` : "SERIES COMPLETE"), big, cards);
+    if (g.r) cards.classList.add("rr-" + g.r);
     if (it.reward) box.append(el("div", "fx-gift skill", "特殊スキルガチャチケット +1枚"), el("p", "fx-note", "「スキルチケットで引く」で、特殊スキルのカードが引けます。"));
-    flash("gold"); rain(["#ffd36b", "#ff9cc2", "#9fd0ff", "#ffffff", "#e88cff"]);
+    const tone = { N: ["#9fd9c4", "#ffffff"], R: ["#8fb8ff", "#cfe0ff", "#ffffff"], SR: ["#e88cff", "#ffd9ff", "#ffffff"] }[g.r];
+    flash(g.r === "R" ? "blue" : g.r === "SR" ? "purple" : g.r === "N" ? "white" : "gold");
+    rain(tone || ["#ffd36b", "#ff9cc2", "#9fd0ff", "#ffffff", "#e88cff"]);
   }
   box.append(el("p", "fx-note", "タップで閉じる"));
   $("fx").replaceChildren(box);
