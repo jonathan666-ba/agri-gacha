@@ -613,7 +613,7 @@ const SERIES = [
   { id: "treasure", name: "宝箱", back: "back_cow_v2", hidden: true },
   // 宝箱A〜Eをすべて集めると解放される(宝箱は封印中)。特殊スキルガチャチケットでも引ける(取り方は画面では明かさない)
   { id: "skill", name: "特殊スキル", back: "back", unlock: st => !boxesSealed() && BOXES.every(id => st.counts[id]),
-    get hint() { return boxesSealed() ? "解放条件は準備中です" : `宝箱A〜Eをすべて集めると解放されます（あと${BOXES.filter(id => !state.counts[id]).length}種類）`; } },
+    get hint() { return boxesSealed() ? "" : `宝箱A〜Eをすべて集めると解放されます（あと${BOXES.filter(id => !state.counts[id]).length}種類）`; } },
 ];
 const CARDS = [
   { s: "work",  id: "plough",    name: "耕起1",     en: "Ploughing",           r: "N",   eff: "収量+10・メンタル−20・低温長雨回避C。春ターンのみ使える" },
