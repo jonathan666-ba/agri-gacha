@@ -176,6 +176,9 @@ h1 { display: flex; align-items: center; gap: 14px; }
 .who { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
 .who .note { margin: 0; }
 .spell-in { border-top: 0; padding-top: 0; }
+.sound-btn { font: inherit; font-size: 12px; color: var(--muted); background: var(--night-2); border: 1.5px solid var(--line); border-radius: 999px; padding: 4px 12px; cursor: pointer; align-self: center; }
+.sound-btn[aria-pressed="true"] { color: var(--ink); border-color: var(--accent); }
+.sound-btn:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 /* 特殊スキルガチャチケットのボタン(紫) */
 .pull.skill { color: #2a1236; background: linear-gradient(180deg, #f6dcff, var(--sr)); box-shadow: 0 6px 0 #8a3fa0, 0 12px 30px rgba(232,140,255,.35); }
 .pull.skill:active:not(:disabled) { box-shadow: 0 2px 0 #8a3fa0, 0 6px 16px rgba(232,140,255,.3); }
@@ -406,6 +409,7 @@ button.chip:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; 
       <div><b id="sTotal">0</b>累計</div>
       <div><b id="sStreak">0</b>連続ログイン</div>
     </div>
+    <button class="sound-btn" id="soundBtn" type="button" aria-pressed="true">♪ 効果音 オン</button>
   </header>
 
   <div class="news" id="news" role="region" aria-label="What's New">
@@ -1084,6 +1088,7 @@ async function pull(mode) {
   const useTicket = mode !== "daily";
   if (mode === "ticket" ? !(state.tickets > 0) : mode === "skill" ? !(state.skillTickets > 0) : state.lastDate === today()) return;
   busy = true; render();
+  Sfx.play("tap");
   const c = mode === "skill" ? rollSkill() : rollCard();
   const isNew = !state.counts[c.id];
   const doneBefore = completedSeries(state);
@@ -1180,6 +1185,7 @@ async function flourish(g, r) {
   const st = document.querySelector(".stage"), rays = $("rays");
   g.style.setProperty("--ac", { R: "rgba(143,184,255,.55)", SR: "rgba(232,140,255,.65)", SSR: "rgba(255,211,107,.85)" }[r]);
   g.classList.add("afterglow");
+  Sfx.play(r);
   if (r === "R") {
     flash("blue"); ring(g, "#8fb8ff");
     burst(g, 22, ["#8fb8ff", "#ffffff"], 170); stamp(g, "R", r);
@@ -1207,6 +1213,7 @@ async function unveil(g, r, say) {
   say(`<span class="badge ${r}">${r}</span> ？？？`);
   await wait((r === "SSR" ? 1700 : r === "SR" ? 1400 : 1100) * t);
   g.classList.add("unveil"); g.classList.remove("veiled");
+  Sfx.play("shine");
   await wait(1500 * t);
   g.classList.remove("unveil");
 }
@@ -1215,17 +1222,17 @@ async function revealCard(g, c, say) {
   const r = c.r, t = matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 1;
   const st = document.querySelector(".stage"), rays = $("rays"), dark = $("blackout"), front = $("frontImg");
   const aura = col => { if (col) { g.style.setProperty("--ac", col); g.classList.add("charging"); } else g.classList.remove("charging"); };
-  const charge = async (tier, ms) => { g.classList.add("charge"); aura(TIER[tier].aura); await wait(ms * t); };
+  const charge = async (tier, ms) => { g.classList.add("charge"); aura(TIER[tier].aura); if (t) Sfx.play("charge", ms, tier); await wait(ms * t); };
   const calm = () => g.classList.remove("charge", "hard", "charging");
   // めくってもすぐには見せない: ぼかした状態(veiled)で開き、あとで unveil で見せる
   const open = (tier, veil = true) => { if (veil) g.classList.add("veiled"); g.dataset.rarity = tier; g.classList.add("open"); };
   rays.className = "rays";
   await wait(600 * t);
   if (r === "SSR") {
-    g.classList.add("charge"); aura("rgba(143,184,255,.75)"); await wait(1500 * t);
-    aura("rgba(232,140,255,.85)"); g.classList.add("hard"); flash("purple"); await wait(1400 * t);
-    dark.classList.add("on"); aura("rgba(255,211,107,1)"); say("……！？"); await wait(2200 * t);
-    kick(st, "quake"); await wait(800 * t);
+    g.classList.add("charge"); aura("rgba(143,184,255,.75)"); if (t) Sfx.play("charge", 1500, "R"); await wait(1500 * t);
+    aura("rgba(232,140,255,.85)"); g.classList.add("hard"); flash("purple"); Sfx.play("sting"); if (t) Sfx.play("charge", 1400, "SR"); await wait(1400 * t);
+    dark.classList.add("on"); aura("rgba(255,211,107,1)"); say("……！？"); if (t) Sfx.play("drone", 2200); await wait(2200 * t);
+    kick(st, "quake"); Sfx.play("boom"); await wait(800 * t);
     calm();
     flash("white"); await wait(140 * t); flash("gold");
     dark.classList.remove("on"); rays.className = "rays on SSR";
@@ -1236,7 +1243,7 @@ async function revealCard(g, c, say) {
   if (p.fake) {
     // 低いレア度の光り方で溜めてから、急に上がる
     await charge(p.fake, TIER[p.fake].ms);
-    calm(); flash("white"); kick(st, "quake"); say("！？");
+    calm(); flash("white"); kick(st, "quake"); say("！？"); Sfx.play("sting");
     await wait(600 * t);
     g.classList.add("hard"); await charge(r, TIER[r].ms * .7);
     calm(); open(r);
@@ -1248,16 +1255,16 @@ async function revealCard(g, c, say) {
     new Image().src = `cards/${c.id}.jpg`;
     front.src = `cards/${decoy.id}.jpg`;
     await charge(p.promo, TIER[p.promo].ms);
-    calm(); open(p.promo, false);
+    calm(); open(p.promo, false); Sfx.play(p.promo);
     if (p.promo === "R") { flash("blue"); stamp(g, "R", "R"); }
     say(`<span class="badge ${decoy.r}">${decoy.r}</span> ${decoy.name}`);
     await wait(1700 * t);
-    say("……！？");
+    say("……！？"); Sfx.play("sting");
     g.classList.add("charge", "hard"); aura(TIER[r].aura);
     await wait(1100 * t);
     g.classList.remove("charge", "hard");
     g.querySelectorAll(".stamp").forEach(e => e.remove());
-    flash("white"); kick(g, "promo");
+    flash("white"); kick(g, "promo"); Sfx.play("whoosh");
     await wait(560 * t);
     g.classList.add("veiled"); front.src = `cards/${c.id}.jpg`; g.dataset.rarity = r;
     await wait(620 * t);
@@ -1267,6 +1274,7 @@ async function revealCard(g, c, say) {
   await charge(r, TIER[r].ms);
   calm(); open(r);
   if (r !== "N") return flourish(g, r);
+  Sfx.play("N");
 }
 
 /* ---------- サイトの設定: What's New・オススメリンク・管理者メニュー ---------- */
@@ -1519,12 +1527,108 @@ async function castSpell() {
     $("spellInput").value = "";
     spellMsg(`呪文が通じました！ カード${cards}枚とチケット${sp.tickets}枚を受け取りました。`, "ok");
     toast(`ふっかつのじゅもんが 通じた！ カード${cards}枚・チケット${sp.tickets}枚`);
+    Sfx.play("fanfare");
     celebrateComplete(doneBefore, rewarded);
   } catch (e) {
     if (e.code === "spell/used") spellMsg("この呪文はもう使われています。1つの呪文は1回だけ使えます。", "err");
     else { spellMsg("呪文を使えませんでした。通信のよいところで、もう一度試してください。", "err"); showError(e && (e.code || e.message) || e); }
   }
   busy = false; $("spellBtn").disabled = false; render();
+}
+
+/* ---------- 効果音: 音のファイルは使わず、Web Audio で合成する ----------
+   ブラウザは、画面に触れるまで音を出させないので、最初のタップで鳴らせる状態にする(Sfx.unlock)。
+   オン・オフはこのブラウザに覚えておく */
+const Sfx = (() => {
+  const KEY = "agri-sound";
+  let on = true;
+  try { on = localStorage.getItem(KEY) !== "off"; } catch (e) {}
+  let ctx = null, out = null;
+  function ac() {
+    if (!on) return null;
+    try {
+      if (!ctx) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return null;
+        ctx = new AC();
+        const comp = ctx.createDynamicsCompressor();
+        out = ctx.createGain(); out.gain.value = 0.5;
+        out.connect(comp); comp.connect(ctx.destination);
+      }
+      if (ctx.state === "suspended") ctx.resume();
+      return ctx;
+    } catch (e) { return null; }
+  }
+  // 音を1つ: 周波数 f(Hz) を t 秒後から d 秒。to を渡すと音の高さが滑る
+  function tone(f, t, d, o = {}) {
+    const c = ac(); if (!c) return;
+    const t0 = c.currentTime + t, osc = c.createOscillator(), g = c.createGain();
+    osc.type = o.type || "sine";
+    osc.frequency.setValueAtTime(f, t0);
+    if (o.to) osc.frequency.exponentialRampToValueAtTime(o.to, t0 + d);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(o.vol != null ? o.vol : 0.2, t0 + (o.a || 0.008));
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + d);
+    osc.connect(g); g.connect(out);
+    osc.start(t0); osc.stop(t0 + d + 0.05);
+  }
+  // ザーッという音(風・衝撃)。フィルタの周波数 f を to まで動かす
+  function noise(t, d, o = {}) {
+    const c = ac(); if (!c) return;
+    const len = Math.max(1, Math.floor(c.sampleRate * d)), buf = c.createBuffer(1, len, c.sampleRate), data = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+    const src = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain(), t0 = c.currentTime + t;
+    src.buffer = buf; f.type = o.type || "bandpass"; f.Q.value = o.q || 1;
+    f.frequency.setValueAtTime(o.f || 1000, t0);
+    if (o.to) f.frequency.exponentialRampToValueAtTime(o.to, t0 + d);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(o.vol != null ? o.vol : 0.15, t0 + (o.a || 0.01));
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + d);
+    src.connect(f); f.connect(g); g.connect(out);
+    src.start(t0); src.stop(t0 + d + 0.05);
+  }
+  const hz = n => 440 * Math.pow(2, (n - 69) / 12); // MIDI の音番号 → 周波数(60 がド)
+  const bell = (n, t, d = 0.6, vol = 0.16) => { tone(hz(n), t, d, { type: "triangle", vol }); tone(hz(n + 12), t, d * 0.7, { vol: vol * 0.5 }); };
+  const sparkle = (t, count = 8, base = 84) => { for (let i = 0; i < count; i++) tone(hz(base + Math.floor(Math.random() * 12)), t + i * 0.045, 0.18, { vol: 0.06 }); };
+  const S = {
+    tap() { tone(hz(84), 0, 0.08, { type: "square", vol: 0.05, to: hz(91) }); },
+    charge(ms, tier) { const d = ms / 1000; tone(hz(48), 0, d, { type: "sawtooth", vol: 0.04, to: hz({ N: 60, R: 67, SR: 72 }[tier] || 64) }); noise(0, d, { f: 400, to: 3000, vol: 0.05 }); },
+    sting() { tone(hz(76), 0, 0.3, { type: "square", vol: 0.07 }); tone(hz(82), 0, 0.3, { type: "square", vol: 0.05 }); },
+    drone(ms) { const d = ms / 1000; tone(hz(36), 0, d, { type: "sawtooth", vol: 0.07, to: hz(48) }); noise(0, d, { f: 200, to: 2000, vol: 0.07, type: "lowpass" }); },
+    boom() { tone(hz(40), 0, 0.8, { vol: 0.45, to: hz(24) }); noise(0, 0.5, { f: 300, vol: 0.25, type: "lowpass" }); },
+    whoosh() { noise(0, 0.55, { f: 500, to: 5000, vol: 0.12 }); },
+    shine() { sparkle(0, 10, 88); },
+    N() { bell(76, 0); bell(81, 0.1); },
+    R() { [72, 76, 79, 84].forEach((n, i) => bell(n, i * 0.07, 0.5, 0.15)); sparkle(0.3, 6); },
+    SR() { [72, 76, 79, 84, 88].forEach((n, i) => bell(n, i * 0.06, 0.6, 0.16)); [60, 64, 67].forEach(n => tone(hz(n), 0.35, 1.2, { type: "sawtooth", vol: 0.035 })); sparkle(0.3, 12); },
+    SSR() {
+      S.boom();
+      [60, 64, 67, 72, 76, 79, 84, 88, 91, 96].forEach((n, i) => bell(n, 0.05 + i * 0.05, 0.7, 0.14));
+      [48, 60, 64, 67, 72].forEach(n => tone(hz(n), 0.6, 2.2, { type: "sawtooth", vol: 0.04 }));
+      [76, 79, 84].forEach(n => tone(hz(n), 0.6, 2, { type: "triangle", vol: 0.07 }));
+      sparkle(0.6, 24, 86); sparkle(1.4, 16, 90);
+    },
+    stamp(k) { tone(hz(72 + [0, 2, 4, 5, 7, 9, 11, 12][k % 8]), 0, 0.15, { type: "square", vol: 0.06 }); noise(0, 0.06, { f: 2000, vol: 0.07 }); },
+    coin() { tone(hz(88), 0, 0.08, { type: "square", vol: 0.07 }); tone(hz(93), 0.08, 0.5, { type: "square", vol: 0.07 }); sparkle(0.1, 5, 96); },
+    fanfare() {
+      [[67, 0], [67, 0.12], [67, 0.24], [72, 0.36], [76, 0.62], [79, 0.8]].forEach(([n, t]) => { tone(hz(n), t, 0.22, { type: "square", vol: 0.06 }); tone(hz(n - 12), t, 0.22, { type: "triangle", vol: 0.08 }); });
+      [60, 64, 67, 72, 76].forEach(n => tone(hz(n), 1.0, 1.6, { type: "triangle", vol: 0.08 }));
+      sparkle(1.0, 16);
+    },
+    jingle() { [79, 84, 88].forEach((n, i) => bell(n, i * 0.08, 0.4, 0.13)); },
+  };
+  return {
+    play(name, ...args) { try { if (on && S[name]) S[name](...args); } catch (e) {} },
+    // name の音を ms ミリ秒後に鳴らす(画面の動きに合わせるため)
+    later(ms, name, ...args) { setTimeout(() => this.play(name, ...args), ms); },
+    unlock() { ac(); },
+    get on() { return on; },
+    toggle() { on = !on; try { localStorage.setItem(KEY, on ? "on" : "off"); } catch (e) {} if (on) S.jingle(); return on; },
+  };
+})();
+function renderSound() {
+  $("soundBtn").textContent = Sfx.on ? "♪ 効果音 オン" : "♪ 効果音 オフ";
+  $("soundBtn").setAttribute("aria-pressed", Sfx.on);
 }
 
 /* ---------- コンプリートと演出 ---------- */
@@ -1564,19 +1668,21 @@ function playFx() {
     box.append(el("div", "fx-cap", "WELCOME"), big, el("div", "fx-gift", `プレゼント チケット${WELCOME_TICKETS}枚`),
       el("p", "fx-note", "「チケットで引く」で、好きなときにカードを引けます。"));
     flash("gold"); rain(["#ffd36b", "#fff3c4", "#ff9cc2", "#9fd0ff", "#ffffff"]);
+    Sfx.play("fanfare"); Sfx.later(1000, "coin");
   } else if (it.kind === "login") {
     const d = it.streak, from = Math.max(1, d - 6), days = el("div", "fx-days");
     for (let k = 0; k < 7; k++) {
       const n = from + k, i = el("i", (n <= d ? "on" : "") + (n === d ? " today" : "") + (loginBonus(n) ? " bonus" : ""), String(n));
       i.style.setProperty("--k", k);
       days.append(i);
+      if (n <= d) Sfx.later((k * 0.12 + 0.3) * 1000, "stamp", k);
     }
     const big = el("h2", "fx-big"); big.append(`${d}日目！`, el("small", "", "連続ログイン"));
     box.append(el("div", "fx-cap", "LOGIN BONUS"), big, days);
     if (it.n) box.append(el("div", "fx-gift", `ごほうび チケット+${it.n}枚`));
     const nx = nextBonus(d);
     box.append(el("p", "fx-note", `次のごほうび：${nx.day}日目にチケット+${nx.n}`));
-    if (it.n) { flash("gold"); rain(["#ffd36b", "#fff3c4", "#ff9cc2", "#ffffff"]); }
+    if (it.n) { flash("gold"); rain(["#ffd36b", "#fff3c4", "#ff9cc2", "#ffffff"]); Sfx.later((Math.min(d, 7) * 0.12 + 0.5) * 1000, "coin"); }
   } else {
     const g = groupOf(it.series), s = seriesOf[g.s], cards = el("div", "fx-cards");
     groupCards(it.series).forEach((c, k) => {
@@ -1592,6 +1698,8 @@ function playFx() {
     const tone = { N: ["#9fd9c4", "#ffffff"], R: ["#8fb8ff", "#cfe0ff", "#ffffff"], SR: ["#e88cff", "#ffd9ff", "#ffffff"] }[g.r];
     flash(g.r === "R" ? "blue" : g.r === "SR" ? "purple" : g.r === "N" ? "white" : "gold");
     rain(tone || ["#ffd36b", "#ff9cc2", "#9fd0ff", "#ffffff", "#e88cff"]);
+    Sfx.play("fanfare");
+    if (it.reward) Sfx.later(1000, "coin");
   }
   box.append(el("p", "fx-note", "タップで閉じる"));
   $("fx").replaceChildren(box);
@@ -1696,7 +1804,7 @@ function gain(base, id) {
 async function tradeAct(fn, done) {
   if (busy || !playerRef) return false;
   busy = true; render();
-  try { await playerTx(fn); if (done) toast(done); return true; }
+  try { await playerTx(fn); if (done) { toast(done); Sfx.play("jingle"); } return true; }
   catch (e) {
     if (e.trade) toast(e.message);
     else { toast("うまくいきませんでした。もう一度試してください。"); showError(e && (e.code || e.message) || e); }
@@ -1983,6 +2091,7 @@ async function redeemInner() {
   state.tickets = (state.tickets || 0) + t.tickets;
   save();
   $("codeInput").value = "";
+  Sfx.play("coin");
   ticketMsg(`「${raw.trim()}」でチケットを${t.tickets}枚もらいました。好きなときに「チケットで引く」から使えます。`, "ok");
   render();
 }
@@ -2060,6 +2169,10 @@ $("resetBtn").onclick = () => {
 $("ticketPullBtn").onclick = () => pull("ticket");
 $("skillPullBtn").onclick = () => pull("skill");
 $("fx").onclick = closeFx;
+$("soundBtn").onclick = () => { Sfx.toggle(); renderSound(); };
+// 最初に画面に触れたときに、音を鳴らせる状態にする
+["pointerdown", "keydown", "touchend"].forEach(ev => addEventListener(ev, () => Sfx.unlock(), true));
+renderSound();
 $("zoom").onclick = () => { $("zoom").hidden = true; };
 addEventListener("keydown", e => {
   if (e.key !== "Escape") return;
