@@ -1537,13 +1537,14 @@ async function castSpell() {
 }
 
 /* ---------- 効果音: 音のファイルは使わず、Web Audio で合成する ----------
+   ベル・ハープ・ブラス・ストリングス・シンバル・重低音を合成し、ホールのような残響(リバーブ)を通して豪華に鳴らす。
    ブラウザは、画面に触れるまで音を出させないので、最初のタップで鳴らせる状態にする(Sfx.unlock)。
    オン・オフはこのブラウザに覚えておく */
 const Sfx = (() => {
   const KEY = "agri-sound";
   let on = true;
   try { on = localStorage.getItem(KEY) !== "off"; } catch (e) {}
-  let ctx = null, out = null;
+  let ctx = null, dry = null, verb = null;
   function ac() {
     if (!on) return null;
     try {
@@ -1551,71 +1552,160 @@ const Sfx = (() => {
         const AC = window.AudioContext || window.webkitAudioContext;
         if (!AC) return null;
         ctx = new AC();
-        const comp = ctx.createDynamicsCompressor();
-        out = ctx.createGain(); out.gain.value = 0.5;
-        out.connect(comp); comp.connect(ctx.destination);
+        const master = ctx.createGain(), comp = ctx.createDynamicsCompressor();
+        master.gain.value = 0.55;
+        comp.threshold.value = -14; comp.ratio.value = 4;
+        master.connect(comp); comp.connect(ctx.destination);
+        dry = ctx.createGain(); dry.connect(master);
+        // 残響: 2.8秒で消えていく左右別々のザーッという音を、響きの形として使う
+        verb = ctx.createConvolver();
+        const len = Math.floor(ctx.sampleRate * 2.8), ir = ctx.createBuffer(2, len, ctx.sampleRate);
+        for (let ch = 0; ch < 2; ch++) { const d = ir.getChannelData(ch); for (let k = 0; k < len; k++) d[k] = (Math.random() * 2 - 1) * Math.pow(1 - k / len, 3); }
+        verb.buffer = ir;
+        const vg = ctx.createGain(); vg.gain.value = 0.8;
+        verb.connect(vg); vg.connect(master);
       }
       if (ctx.state === "suspended") ctx.resume();
       return ctx;
     } catch (e) { return null; }
   }
-  // 音を1つ: 周波数 f(Hz) を t 秒後から d 秒。to を渡すと音の高さが滑る
-  function tone(f, t, d, o = {}) {
-    const c = ac(); if (!c) return;
-    const t0 = c.currentTime + t, osc = c.createOscillator(), g = c.createGain();
-    osc.type = o.type || "sine";
-    osc.frequency.setValueAtTime(f, t0);
-    if (o.to) osc.frequency.exponentialRampToValueAtTime(o.to, t0 + d);
-    g.gain.setValueAtTime(0.0001, t0);
-    g.gain.exponentialRampToValueAtTime(o.vol != null ? o.vol : 0.2, t0 + (o.a || 0.008));
-    g.gain.exponentialRampToValueAtTime(0.0001, t0 + d);
-    osc.connect(g); g.connect(out);
-    osc.start(t0); osc.stop(t0 + d + 0.05);
+  // 音の出口: 左右の位置(pan)を決め、そのままの音と残響へ送る量(wet)を分ける
+  function route(c, node, pan, wet) {
+    if (pan && c.createStereoPanner) { const p = c.createStereoPanner(); p.pan.value = pan; node.connect(p); node = p; }
+    node.connect(dry);
+    if (wet > 0) { const w = c.createGain(); w.gain.value = wet; node.connect(w); w.connect(verb); }
   }
-  // ザーッという音(風・衝撃)。フィルタの周波数 f を to まで動かす
+  // 音を1つ: 周波数 f を t 秒後から d 秒。n 本の発振器を det セントずつずらして重ねると厚みが出る。
+  // lp を渡すと明るさを lp → lpTo に動かす。sus を渡すと、途中まで音量を保ってから消える
+  function voice(f, t, d, o = {}) {
+    const c = ac(); if (!c) return;
+    const t0 = c.currentTime + t, g = c.createGain(), n = o.n || 1;
+    let dest = g;
+    if (o.lp) {
+      const fl = c.createBiquadFilter();
+      fl.type = "lowpass"; fl.Q.value = o.q || 0.7;
+      fl.frequency.setValueAtTime(o.lp, t0);
+      if (o.lpTo) fl.frequency.exponentialRampToValueAtTime(o.lpTo, t0 + (o.lpT || d * 0.3));
+      fl.connect(g); dest = fl;
+    }
+    for (let k = 0; k < n; k++) {
+      const osc = c.createOscillator();
+      osc.type = o.type || "sine";
+      osc.frequency.setValueAtTime(f, t0);
+      if (o.to) osc.frequency.exponentialRampToValueAtTime(o.to, t0 + (o.toT || d));
+      if (n > 1) osc.detune.value = (k / (n - 1) - 0.5) * 2 * (o.det || 8);
+      osc.connect(dest); osc.start(t0); osc.stop(t0 + d + 0.1);
+    }
+    const v = (o.vol != null ? o.vol : 0.2) / Math.sqrt(n);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(v, t0 + (o.a || 0.006));
+    if (o.sus) g.gain.setValueAtTime(v, t0 + d * o.sus);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + d);
+    route(c, g, o.pan, o.wet != null ? o.wet : 0.3);
+  }
+  // ザーッという音(風・シンバル・衝撃)。フィルタ(type)の周波数 f を to まで動かす
   function noise(t, d, o = {}) {
     const c = ac(); if (!c) return;
     const len = Math.max(1, Math.floor(c.sampleRate * d)), buf = c.createBuffer(1, len, c.sampleRate), data = buf.getChannelData(0);
-    for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
-    const src = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain(), t0 = c.currentTime + t;
-    src.buffer = buf; f.type = o.type || "bandpass"; f.Q.value = o.q || 1;
-    f.frequency.setValueAtTime(o.f || 1000, t0);
-    if (o.to) f.frequency.exponentialRampToValueAtTime(o.to, t0 + d);
+    for (let k = 0; k < len; k++) data[k] = Math.random() * 2 - 1;
+    const src = c.createBufferSource(), fl = c.createBiquadFilter(), g = c.createGain(), t0 = c.currentTime + t;
+    src.buffer = buf; fl.type = o.type || "bandpass"; fl.Q.value = o.q || 1;
+    fl.frequency.setValueAtTime(o.f || 1000, t0);
+    if (o.to) fl.frequency.exponentialRampToValueAtTime(o.to, t0 + d);
     g.gain.setValueAtTime(0.0001, t0);
     g.gain.exponentialRampToValueAtTime(o.vol != null ? o.vol : 0.15, t0 + (o.a || 0.01));
     g.gain.exponentialRampToValueAtTime(0.0001, t0 + d);
-    src.connect(f); f.connect(g); g.connect(out);
-    src.start(t0); src.stop(t0 + d + 0.05);
+    src.connect(fl); fl.connect(g); src.start(t0); src.stop(t0 + d + 0.05);
+    route(c, g, o.pan, o.wet != null ? o.wet : 0.3);
   }
   const hz = n => 440 * Math.pow(2, (n - 69) / 12); // MIDI の音番号 → 周波数(60 がド)
-  const bell = (n, t, d = 0.6, vol = 0.16) => { tone(hz(n), t, d, { type: "triangle", vol }); tone(hz(n + 12), t, d * 0.7, { vol: vol * 0.5 }); };
-  const sparkle = (t, count = 8, base = 84) => { for (let i = 0; i < count; i++) tone(hz(base + Math.floor(Math.random() * 12)), t + i * 0.045, 0.18, { vol: 0.06 }); };
+  const PENTA = [0, 2, 4, 7, 9];
+  const scale = (base, k) => base + 12 * Math.floor(k / 5) + PENTA[k % 5];
+
+  /* 楽器 */
+  // ベル: 倍音をいくつも重ねた、きらびやかな鐘
+  function bell(n, t, o = {}) {
+    const vol = o.vol || 0.12, d = o.d || 1.6;
+    [[1, 1], [2, 0.55], [3.01, 0.32], [4.2, 0.2], [5.43, 0.12], [6.8, 0.07]].forEach(([r, a], k) =>
+      voice(hz(n) * r, t, d / (1 + k * 0.5), { vol: vol * a, pan: o.pan, wet: 0.45 }));
+  }
+  // ハープ: はじいた弦の音。明るい音からすぐ柔らかくなる
+  const pluck = (n, t, o = {}) => voice(hz(n), t, o.d || 0.9, { type: "triangle", n: 2, det: 4, vol: o.vol || 0.12, lp: 7000, lpTo: 1400, lpT: 0.25, pan: o.pan, wet: 0.45 });
+  // ハープのグリッサンド: 下から上へ、左から右へ駆け上がる
+  function gliss(t, base, count, o = {}) {
+    for (let k = 0; k < count; k++) pluck(scale(base, k), t + k * (o.step || 0.035), { vol: o.vol || 0.09, pan: -0.7 + 1.4 * k / Math.max(1, count - 1), d: 1.1 });
+  }
+  // ブラス: 金管の和音。吹いた瞬間に明るくなり、伸ばしてから消える
+  const brass = (notes, t, d, vol = 0.1) => notes.forEach((n, k) =>
+    voice(hz(n), t, d, { type: "sawtooth", n: 3, det: 9, vol, a: 0.03, sus: 0.55, lp: 500, lpTo: 3800, lpT: 0.09, pan: (k - (notes.length - 1) / 2) * 0.25, wet: 0.35 }));
+  // ストリングス: 後ろでゆっくり広がる和音
+  const pad = (notes, t, d, vol = 0.07) => notes.forEach((n, k) =>
+    voice(hz(n), t, d, { type: "sawtooth", n: 4, det: 14, vol, a: Math.min(0.5, d * 0.3), sus: 0.6, lp: 700, lpTo: 2600, lpT: d * 0.5, pan: k % 2 ? 0.4 : -0.4, wet: 0.6 }));
+  // 重低音の「ドン」
+  const sub = (t, vol = 0.5) => { voice(95, t, 0.9, { vol, to: 32, toT: 0.5, wet: 0.15 }); noise(t, 0.35, { type: "lowpass", f: 400, vol: vol * 0.5, wet: 0.2 }); };
+  // シンバルのクラッシュと、ふくらんでいくシンバル
+  const crash = (t, d = 2.2, vol = 0.1) => { noise(t, d, { type: "highpass", f: 5000, vol, a: 0.004, pan: -0.3, wet: 0.5 }); noise(t, d * 0.8, { type: "highpass", f: 7000, vol: vol * 0.7, a: 0.004, pan: 0.3, wet: 0.5 }); };
+  const swell = (t, d, vol = 0.08) => noise(t, d, { type: "highpass", f: 2500, to: 9000, vol, a: d * 0.92, wet: 0.5 });
+  // ティンパニ
+  const timp = (t, n = 43, vol = 0.35) => { voice(hz(n), t, 0.9, { vol, to: hz(n) * 0.92, wet: 0.3 }); noise(t, 0.12, { type: "lowpass", f: 900, vol: vol * 0.4 }); };
+  // キラキラ: 高い音をばらばらに散らす
+  function sparkle(t, count = 10, base = 86, vol = 0.05) {
+    for (let k = 0; k < count; k++) voice(hz(scale(base, Math.floor(Math.random() * 8))), t + k * 0.04 + Math.random() * 0.02, 0.5, { vol, pan: Math.random() * 1.6 - 0.8, wet: 0.6 });
+  }
+
+  /* 場面ごとの音 */
   const S = {
-    tap() { tone(hz(84), 0, 0.08, { type: "square", vol: 0.05, to: hz(91) }); },
-    charge(ms, tier) { const d = ms / 1000; tone(hz(48), 0, d, { type: "sawtooth", vol: 0.04, to: hz({ N: 60, R: 67, SR: 72 }[tier] || 64) }); noise(0, d, { f: 400, to: 3000, vol: 0.05 }); },
-    sting() { tone(hz(76), 0, 0.3, { type: "square", vol: 0.07 }); tone(hz(82), 0, 0.3, { type: "square", vol: 0.05 }); },
-    drone(ms) { const d = ms / 1000; tone(hz(36), 0, d, { type: "sawtooth", vol: 0.07, to: hz(48) }); noise(0, d, { f: 200, to: 2000, vol: 0.07, type: "lowpass" }); },
-    boom() { tone(hz(40), 0, 0.8, { vol: 0.45, to: hz(24) }); noise(0, 0.5, { f: 300, vol: 0.25, type: "lowpass" }); },
-    whoosh() { noise(0, 0.55, { f: 500, to: 5000, vol: 0.12 }); },
-    shine() { sparkle(0, 10, 88); },
-    N() { bell(76, 0); bell(81, 0.1); },
-    R() { [72, 76, 79, 84].forEach((n, i) => bell(n, i * 0.07, 0.5, 0.15)); sparkle(0.3, 6); },
-    SR() { [72, 76, 79, 84, 88].forEach((n, i) => bell(n, i * 0.06, 0.6, 0.16)); [60, 64, 67].forEach(n => tone(hz(n), 0.35, 1.2, { type: "sawtooth", vol: 0.035 })); sparkle(0.3, 12); },
+    tap() { bell(91, 0, { vol: 0.16, d: 0.7 }); voice(hz(79), 0, 0.14, { type: "triangle", vol: 0.16, to: hz(91), wet: 0.3 }); },
+    charge(ms, tier) {
+      const d = ms / 1000, top = { N: 67, R: 74, SR: 79 }[tier] || 72;
+      voice(hz(48), 0, d, { type: "sawtooth", n: 3, det: 12, vol: 0.16, to: hz(top), a: d * 0.5, lp: 400, lpTo: 4000, lpT: d, wet: 0.4 });
+      noise(0, d, { f: 300, to: 6000, vol: 0.14, a: d * 0.85, wet: 0.4 });
+      if (tier !== "N") swell(d * 0.3, d * 0.7, 0.1);
+    },
+    sting() { brass([62, 65, 68, 74], 0, 0.6, 0.11); sub(0, 0.35); crash(0, 1.4, 0.07); },
+    drone(ms) { const d = ms / 1000; pad([36, 43, 48], 0, d + 0.3, 0.08); noise(0, d, { type: "lowpass", f: 150, to: 1500, vol: 0.12, a: d * 0.8, wet: 0.3 }); swell(d * 0.4, d * 0.6, 0.1); },
+    boom() { sub(0, 0.55); crash(0, 2.4, 0.12); timp(0, 36, 0.3); },
+    whoosh() { noise(0, 0.6, { f: 400, to: 7000, vol: 0.2, pan: -0.5, wet: 0.4 }); noise(0.05, 0.6, { f: 600, to: 9000, vol: 0.16, pan: 0.5, wet: 0.4 }); gliss(0.1, 72, 8, { step: 0.03, vol: 0.06 }); },
+    shine() { gliss(0, 84, 10, { step: 0.03, vol: 0.06 }); sparkle(0.25, 10, 91, 0.04); },
+    N() { bell(76, 0, { vol: 0.12 }); bell(83, 0.12, { vol: 0.12 }); pad([64, 71, 76], 0.05, 1.2, 0.035); },
+    R() {
+      gliss(0, 67, 8, { step: 0.03 });
+      [72, 76, 79, 84].forEach((n, k) => bell(n, 0.22 + k * 0.08, { vol: 0.1 }));
+      pad([60, 64, 67, 72], 0.3, 1.6, 0.045); sparkle(0.6, 10);
+    },
+    SR() {
+      gliss(0, 62, 12, { step: 0.028 });
+      brass([60, 64, 67, 72], 0.3, 1.1, 0.09); timp(0.3);
+      [76, 79, 84, 88, 91].forEach((n, k) => bell(n, 0.35 + k * 0.07, { vol: 0.09 }));
+      pad([48, 60, 64, 67, 76], 0.35, 2.4, 0.05); crash(0.3, 2, 0.08); sparkle(0.7, 16, 88);
+    },
     SSR() {
-      S.boom();
-      [60, 64, 67, 72, 76, 79, 84, 88, 91, 96].forEach((n, i) => bell(n, 0.05 + i * 0.05, 0.7, 0.14));
-      [48, 60, 64, 67, 72].forEach(n => tone(hz(n), 0.6, 2.2, { type: "sawtooth", vol: 0.04 }));
-      [76, 79, 84].forEach(n => tone(hz(n), 0.6, 2, { type: "triangle", vol: 0.07 }));
-      sparkle(0.6, 24, 86); sparkle(1.4, 16, 90);
+      sub(0, 0.6); crash(0, 3, 0.14); timp(0, 36, 0.35);
+      gliss(0.05, 55, 16, { step: 0.025, vol: 0.1 });
+      // ブラスのファンファーレ: ソ・ソ・ソ・ドー、レ ミー と上がって、大きなドの和音
+      [[67, 0.35], [67, 0.47], [67, 0.59], [72, 0.71]].forEach(([n, t]) => brass([n, n - 12], t, 0.3, 0.1));
+      brass([65, 69, 72, 77], 1.05, 0.5, 0.09); timp(1.05, 41);
+      brass([67, 71, 74, 79], 1.45, 0.5, 0.09); timp(1.45, 43);
+      brass([60, 64, 67, 72, 76, 84], 1.85, 2.6, 0.1); timp(1.85, 36, 0.45); sub(1.85, 0.45); crash(1.85, 3.2, 0.13);
+      pad([48, 55, 60, 64, 67, 72, 76], 1.85, 3.6, 0.05);
+      [84, 88, 91, 96, 100, 103, 108].forEach((n, k) => bell(n, 1.9 + k * 0.06, { vol: 0.07, pan: k % 2 ? 0.5 : -0.5 }));
+      sparkle(0.4, 24, 86); sparkle(2.0, 30, 89); gliss(2.4, 79, 14, { step: 0.03, vol: 0.06 });
     },
-    stamp(k) { tone(hz(72 + [0, 2, 4, 5, 7, 9, 11, 12][k % 8]), 0, 0.15, { type: "square", vol: 0.06 }); noise(0, 0.06, { f: 2000, vol: 0.07 }); },
-    coin() { tone(hz(88), 0, 0.08, { type: "square", vol: 0.07 }); tone(hz(93), 0.08, 0.5, { type: "square", vol: 0.07 }); sparkle(0.1, 5, 96); },
+    stamp(k) { const n = scale(72, k); bell(n, 0, { vol: 0.2, d: 1.2 }); pluck(n - 12, 0, { vol: 0.16 }); if (k === 0) pad([60, 67, 72], 0, 2.2, 0.05); },
+    coin() {
+      voice(hz(88), 0, 0.12, { type: "square", vol: 0.11, lp: 5000, wet: 0.4 });
+      voice(hz(95), 0.09, 0.8, { type: "square", vol: 0.11, lp: 6000, lpTo: 2500, wet: 0.5 });
+      bell(95, 0.09, { vol: 0.13, d: 1.2 }); sparkle(0.15, 8, 93, 0.06);
+    },
     fanfare() {
-      [[67, 0], [67, 0.12], [67, 0.24], [72, 0.36], [76, 0.62], [79, 0.8]].forEach(([n, t]) => { tone(hz(n), t, 0.22, { type: "square", vol: 0.06 }); tone(hz(n - 12), t, 0.22, { type: "triangle", vol: 0.08 }); });
-      [60, 64, 67, 72, 76].forEach(n => tone(hz(n), 1.0, 1.6, { type: "triangle", vol: 0.08 }));
-      sparkle(1.0, 16);
+      crash(0, 2, 0.08); timp(0, 43);
+      [[67, 0], [67, 0.13], [67, 0.26], [72, 0.4]].forEach(([n, t]) => brass([n, n - 12], t, 0.3, 0.09));
+      brass([69, 72, 77], 0.68, 0.32, 0.08); brass([71, 74, 79], 0.88, 0.32, 0.08); timp(0.68, 41); timp(0.88, 43);
+      brass([60, 64, 67, 72, 76], 1.1, 2, 0.09); timp(1.1, 36, 0.4); sub(1.1, 0.35); crash(1.1, 2.6, 0.11);
+      pad([48, 60, 64, 67, 72], 1.1, 2.8, 0.045);
+      gliss(1.1, 72, 12, { step: 0.03, vol: 0.07 }); sparkle(1.3, 20, 88);
     },
-    jingle() { [79, 84, 88].forEach((n, i) => bell(n, i * 0.08, 0.4, 0.13)); },
+    jingle() { gliss(0, 74, 7, { step: 0.04, vol: 0.08 }); [79, 84, 88].forEach((n, k) => bell(n, 0.25 + k * 0.09, { vol: 0.09 })); sparkle(0.45, 8, 91, 0.04); },
   };
   return {
     play(name, ...args) { try { if (on && S[name]) S[name](...args); } catch (e) {} },
