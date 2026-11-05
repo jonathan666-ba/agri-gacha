@@ -611,8 +611,6 @@ function showError(msg) {
 }
 window.addEventListener("error", e => showError(e.message));
 window.addEventListener("unhandledrejection", e => showError(String(e.reason && e.reason.message || e.reason)));
-const BOXES = ["boxa", "boxb", "boxc", "boxd", "boxe"];
-const boxesSealed = () => !!seriesOf.treasure.hidden;
 // 宝箱シリーズの解放条件: ふつうのシリーズを2つ以上コンプリートする(画面では明かさない)。
 // 一度解放したら treasureOpen を記録して、交換でカードが減っても閉じない
 const TREASURE_KEYS = ["work", "plant", "insect", "cow", "rebun"];
@@ -626,9 +624,8 @@ const SERIES = [
   // unlock: (state) => true になったシリーズだけがガチャに入る
   // hidden: 封印中。ガチャにも図鑑にも出さない(カードのデータと集めた記録は残す)
   { id: "treasure", name: "宝箱", back: "back_cow_v2", unlock: st => !!st.treasureOpen, hint: "" },
-  // 宝箱A〜Eをすべて集めると、ふだんのガチャにも出るようになる。特殊スキルガチャチケットでも引ける(どちらも画面では明かさない)
-  { id: "skill", name: "特殊スキル", back: "back", unlock: st => !boxesSealed() && BOXES.every(id => st.counts[id]),
-    hint: "" }, // 解放条件は画面では明かさない
+  // ふだんのガチャには出ない。シリーズをコンプリートするともらえる特殊スキルガチャチケットだけで引ける(取り方は画面では明かさない)
+  { id: "skill", name: "特殊スキル", back: "back", unlock: () => false, hint: "" },
 ];
 const CARDS = [
   { s: "work",  id: "plough",    name: "耕起1",     en: "Ploughing",           r: "N",   eff: "収量+10・メンタル−20・低温長雨回避C。春ターンのみ使える" },
@@ -773,9 +770,11 @@ function today(d = new Date()) {
 }
 function yesterday() { const d = new Date(); d.setDate(d.getDate() - 1); return today(d); }
 
-// 特殊スキルシリーズだけから引く。レア度の割合は普段と同じ比で、出ないレア度の分は按分する
+// 特殊スキルシリーズだけから、まだ持っていないカードを引く(かぶらない)。チケット8枚で8種類そろう。
+// レア度の割合は普段と同じ比で、残っていないレア度の分は按分する。全部持っていたら(交換で手に入れた場合など)全部から引く
 function rollSkill() {
-  const pool = CARDS.filter(c => c.s === "skill");
+  const all = CARDS.filter(c => c.s === "skill"), left = all.filter(c => !state.counts[c.id]);
+  const pool = left.length ? left : all;
   const rars = Object.keys(RATES).filter(r => pool.some(c => c.r === r));
   const sum = rars.reduce((a, r) => a + RATES[r], 0);
   let x = Math.random() * sum, rar = rars[rars.length - 1];
@@ -1015,7 +1014,8 @@ function render() {
     sec.type = "button";
     sec.className = "spine";
     sec.onclick = () => openBook(s.id);
-    const open = isOpen(s);
+    // ガチャに出ないシリーズでも、1枚でも持っていれば「未解放」とは出さない(特殊スキルなど)
+    const open = isOpen(s) || got > 0;
     sec.innerHTML = `<img src="cards/${s.back}.jpg" alt=""><div class="series-head"><h3>${s.name}シリーズ</h3><span class="cnt">${got}/${list.length}</span>${got === list.length ? '<span class="complete">COMPLETE</span>' : ""}${open ? "" : '<span class="sealed">未解放</span>'}</div><span class="go" aria-hidden="true">›</span>`;
     return sec;
   }));
@@ -1027,7 +1027,7 @@ function render() {
     const got = list.filter(c => state.counts[c.id]).length;
     $("bookTitle").textContent = `${s.name}シリーズ`;
     $("bookCount").textContent = `${got}/${list.length}${got === list.length ? " COMPLETE" : ""}`;
-    $("bookNote").textContent = isOpen(s) ? "手に入れたカードはタップで拡大できます。" : `未解放のシリーズです。${s.hint || ""}`;
+    $("bookNote").textContent = isOpen(s) || got ? "手に入れたカードはタップで拡大できます。" : `未解放のシリーズです。${s.hint || ""}`;
     $("bookGrid").replaceChildren(...list.map(cell));
   }
 
@@ -1107,11 +1107,9 @@ async function pull(mode) {
     state.streak = state.lastDate === yesterday() ? state.streak + 1 : 1;
     state.lastDate = today();
   }
-  const skillWasOpen = isOpen(seriesOf.skill);
   state.total += 1;
   state.counts[c.id] = (state.counts[c.id] || 0) + 1;
   if (c.ticket) state.tickets = (state.tickets || 0) + c.ticket;
-  const unlocked = !skillWasOpen && isOpen(seriesOf.skill);
   state.history.push(useTicket ? { id: c.id, date: today(), via: mode } : { id: c.id, date: today() });
   state.history = state.history.slice(-60);
   const rewarded = grantComplete(state);
@@ -1133,7 +1131,6 @@ async function pull(mode) {
   busy = false; render();
   celebrateComplete(doneBefore, rewarded);
   if (c.ticket) toast(`宝箱からチケット+${c.ticket}枚！`);
-  if (unlocked) celebrate({ kind: "unlock", series: "skill" });
 }
 const wait = ms => new Promise(r => setTimeout(r, ms));
 const kick = (el, cls) => { el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); };
@@ -1733,8 +1730,9 @@ function renderSound() {
 const RARITY_GROUPS = ["N", "R", "SR"].map(r => ({ id: `work-${r}`, s: "work", r }));
 const groupOf = id => RARITY_GROUPS.find(g => g.id === id) || { id, s: id };
 const groupCards = id => { const g = groupOf(id); return CARDS.filter(c => c.s === g.s && (!g.r || c.r === g.r)); };
-// コンプリートすると特殊スキルガチャチケットが1枚もらえるまとまり(1つにつき1回)
-const REWARD_SERIES = ["plant", "insect", "cow", "rebun", ...RARITY_GROUPS.map(g => g.id)];
+// コンプリートすると特殊スキルガチャチケットが1枚もらえるまとまり(1つにつき1回)。
+// 農作業 N・R・SR、植物、昆虫、牛、礼文島、宝箱の8つ = 特殊スキル8種類と同じ数
+const REWARD_SERIES = [...RARITY_GROUPS.map(g => g.id), "plant", "insect", "cow", "rebun", "treasure"];
 const WELCOME_TICKETS = 10;
 const seriesDone = (st, id) => groupCards(id).every(c => (st.counts || {})[c.id] > 0);
 // そろっているまとまり。レア度ごとを先に並べて、同時にそろったときはシリーズまるごとの演出をあとに出す
