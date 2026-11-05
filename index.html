@@ -613,18 +613,22 @@ window.addEventListener("error", e => showError(e.message));
 window.addEventListener("unhandledrejection", e => showError(String(e.reason && e.reason.message || e.reason)));
 const BOXES = ["boxa", "boxb", "boxc", "boxd", "boxe"];
 const boxesSealed = () => !!seriesOf.treasure.hidden;
+// 宝箱シリーズの解放条件: ふつうのシリーズを2つ以上コンプリートする(画面では明かさない)。
+// 一度解放したら treasureOpen を記録して、交換でカードが減っても閉じない
+const TREASURE_KEYS = ["work", "plant", "insect", "cow", "rebun"];
+const TREASURE_NEED = 2;
 const SERIES = [
   { id: "work",  name: "農作業", back: "back_work2" },
   { id: "plant", name: "植物", back: "back_plant_v2" },
   { id: "insect", name: "昆虫", back: "back_insect_v2" },
   { id: "cow",   name: "牛", back: "back_cow_v2" },
   { id: "rebun", name: "礼文島", back: "back_plant_v2" },
-  // unlock: (state) => true になったシリーズだけがガチャに入る。条件は未定なので今は常に閉じている
+  // unlock: (state) => true になったシリーズだけがガチャに入る
   // hidden: 封印中。ガチャにも図鑑にも出さない(カードのデータと集めた記録は残す)
-  { id: "treasure", name: "宝箱", back: "back_cow_v2", hidden: true },
-  // 宝箱A〜Eをすべて集めると解放される(宝箱は封印中)。特殊スキルガチャチケットでも引ける(取り方は画面では明かさない)
+  { id: "treasure", name: "宝箱", back: "back_cow_v2", unlock: st => !!st.treasureOpen, hint: "" },
+  // 宝箱A〜Eをすべて集めると、ふだんのガチャにも出るようになる。特殊スキルガチャチケットでも引ける(どちらも画面では明かさない)
   { id: "skill", name: "特殊スキル", back: "back", unlock: st => !boxesSealed() && BOXES.every(id => st.counts[id]),
-    get hint() { return boxesSealed() ? "" : `宝箱A〜Eをすべて集めると解放されます（あと${BOXES.filter(id => !state.counts[id]).length}種類）`; } },
+    hint: "" }, // 解放条件は画面では明かさない
 ];
 const CARDS = [
   { s: "work",  id: "plough",    name: "耕起1",     en: "Ploughing",           r: "N",   eff: "収量+10・メンタル−20・低温長雨回避C。春ターンのみ使える" },
@@ -695,19 +699,20 @@ const CARDS = [
   { s: "rebun", id: "rishiri_a",      name: "利尻富士（飛行機から）", en: "Rishiri-Fuji (A Ver.)", r: "R", eff: "成層火山・標高1721m・N45°10′ E141°15′" },
   { s: "rebun", id: "rishiri_r",      name: "利尻富士（礼文島から）", en: "Rishiri-Fuji (R Ver.)", r: "R", eff: "成層火山・標高1721m・N45°10′ E141°15′" },
   // ticket: 引くとチケットがもらえる枚数
-  { s: "treasure", id: "boxa",     name: "宝箱A",     en: "Treasure Box A", r: "N", ticket: 1, eff: "宝箱Aの中身との引換券。何がもらえるかはお楽しみ。引くとチケット+1枚" },
-  { s: "treasure", id: "boxb",     name: "宝箱B",     en: "Treasure Box B", r: "N", ticket: 1, eff: "宝箱Bの中身との引換券。何がもらえるかはお楽しみ。引くとチケット+1枚" },
-  { s: "treasure", id: "boxc",     name: "宝箱C",     en: "Treasure Box C", r: "N", ticket: 1, eff: "宝箱Cの中身との引換券。何がもらえるかはお楽しみ。引くとチケット+1枚" },
-  { s: "treasure", id: "boxd",     name: "宝箱D",     en: "Treasure Box D", r: "N", ticket: 1, eff: "宝箱Dの中身との引換券。何がもらえるかはお楽しみ。引くとチケット+1枚" },
-  { s: "treasure", id: "boxe",     name: "宝箱E",     en: "Treasure Box E", r: "N", ticket: 1, eff: "宝箱Eの中身との引換券。何がもらえるかはお楽しみ。引くとチケット+1枚" },
+  { s: "treasure", id: "boxa",     name: "宝箱A",     en: "Treasure Box A", r: "SR", ticket: 1, eff: "宝箱Aの中身との引換券。何がもらえるかはお楽しみ。引くとチケット+1枚" },
+  { s: "treasure", id: "boxb",     name: "宝箱B",     en: "Treasure Box B", r: "SR", ticket: 1, eff: "宝箱Bの中身との引換券。何がもらえるかはお楽しみ。引くとチケット+1枚" },
+  { s: "treasure", id: "boxc",     name: "宝箱C",     en: "Treasure Box C", r: "SR", ticket: 1, eff: "宝箱Cの中身との引換券。何がもらえるかはお楽しみ。引くとチケット+1枚" },
+  { s: "treasure", id: "boxd",     name: "宝箱D",     en: "Treasure Box D", r: "SR", ticket: 1, eff: "宝箱Dの中身との引換券。何がもらえるかはお楽しみ。引くとチケット+1枚" },
+  { s: "treasure", id: "boxe",     name: "宝箱E",     en: "Treasure Box E", r: "SR", ticket: 1, eff: "宝箱Eの中身との引換券。何がもらえるかはお楽しみ。引くとチケット+1枚" },
   { s: "treasure", id: "hinoki",   name: "ひのきの棒", en: "Cypress stick",  r: "N", eff: "宝箱Fの中身との引換券。何がもらえるかはお楽しみ" },
   { s: "treasure", id: "chimera",  name: "キメラのつばさ（偽）", en: "The Wings of the Chimera (Fake)", r: "N", eff: "キメラの翼の偽物。一瞬で移動などできない" },
   { s: "treasure", id: "suteteko", name: "ステテコパンツ", en: "Boxer Shorts", r: "N", eff: "誰かが脱ぎ捨てたパンツ。通気性があって蒸れない" },
-  { s: "treasure", id: "horsedung", name: "うまのふん", en: "Horse Manure",   r: "N", eff: "どこかの馬がみちばたにおとしたふん。ちょっとくさい" },
   { s: "treasure", id: "greatermimic", name: "人食い箱", en: "Greater Mimic", r: "R", eff: "ミミックが進化したもの。下級の冒険者を一口で喰らう" },
   { s: "treasure", id: "mimicbaby", name: "ちびミミック", en: "Mimic Baby",   r: "R", eff: "ミミックのこども。ちいさいが、ふたをあけると襲ってくる" },
-  { s: "treasure", id: "emptybox", name: "空の宝箱",   en: "Empty Treasure Box", r: "R", eff: "何も入っていない宝箱。中身は他の冒険者がもちさったようだ" },
+  { s: "treasure", id: "horsedung", name: "うまのふん", en: "Horse Manure",   r: "N", eff: "どこかの馬がみちばたにおとしたふん。ちょっとくさい" },
+  { s: "treasure", id: "kusarigama", name: "くさりがま", en: "Chain Spear",   r: "N", eff: "かまを外せば鉄のくさりになる。測量に使おう" },
   { s: "treasure", id: "mimic",    name: "ミミック",   en: "Mimic",          r: "R", eff: "宝箱に化けて、開けようとした冒険者を不意打ちで襲う魔物" },
+  { s: "treasure", id: "emptybox", name: "空の宝箱",   en: "Empty Treasure Box", r: "R", eff: "何も入っていない宝箱。中身は他の冒険者がもちさったようだ" },
   { s: "skill", id: "esper",     name: "エスパー", en: "Esper",             r: "SSR", eff: "災害回避+1ランク" },
   { s: "skill", id: "pureheart", name: "純心",     en: "Pure Heart",        r: "SSR",  eff: "好天時に収量+25" },
   { s: "skill", id: "farmer",    name: "篤農家",   en: "Exemplary farmer",  r: "SR",  eff: "基本収量+25%" },
@@ -888,7 +893,7 @@ async function enter(user) {
   }
   checkLogin(); render();
   const rewarded = grantComplete(state);
-  if (rewarded.length) { save(); celebrateComplete(completedSeries(state).filter(id => !rewarded.includes(id)), rewarded); }
+  if (rewarded.length || treasureNews) { save(); celebrateComplete(completedSeries(state).filter(id => !rewarded.includes(id)), rewarded); }
 }
 // 読み込んだ記録を state にする(名前と時刻は state に入れない)
 function useRemote(d) {
@@ -999,7 +1004,9 @@ function render() {
   $("sDraws").textContent = (state.lastDate === today() ? 0 : 1) + (state.tickets || 0) + (state.skillTickets || 0);
   $("sStreak").textContent = state.lastLogin === today() || state.lastLogin === yesterday() ? (state.loginStreak || 0) : 0;
   const nx = nextBonus(state.lastLogin === today() ? state.loginStreak || 0 : 0);
-  $("loginNote").textContent = `連続ログイン ${state.lastLogin === today() ? state.loginStreak || 0 : 0}日目 ・ 次のごほうび：${nx.day}日目にチケット+${nx.n}`;
+  const days = state.loginDays || 0;
+  $("loginNote").textContent = `連続ログイン ${state.lastLogin === today() ? state.loginStreak || 0 : 0}日目 ・ 次のごほうび：${nx.day}日目にチケット+${nx.n}` +
+    ` ・ 累計ログイン ${days}日（あと${TOTAL_EVERY - days % TOTAL_EVERY}日でチケット+1）`;
 
   $("shelf").replaceChildren(...SERIES.map(s => {
     const list = CARDS.filter(c => c.s === s.id);
@@ -1125,8 +1132,8 @@ async function pull(mode) {
   showCard(c, isNew, mode === "skill" ? "SKILL GET!" : useTicket ? "TICKET GET!" : "GET!");
   busy = false; render();
   celebrateComplete(doneBefore, rewarded);
-  const news = [c.ticket && `宝箱からチケット+${c.ticket}枚！`, unlocked && "宝箱A〜Eがそろった！ 特殊スキルシリーズが解放されました"].filter(Boolean);
-  if (news.length) toast(news.join(" "));
+  if (c.ticket) toast(`宝箱からチケット+${c.ticket}枚！`);
+  if (unlocked) celebrate({ kind: "unlock", series: "skill" });
 }
 const wait = ms => new Promise(r => setTimeout(r, ms));
 const kick = (el, cls) => { el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); };
@@ -1733,7 +1740,11 @@ const seriesDone = (st, id) => groupCards(id).every(c => (st.counts || {})[c.id]
 // そろっているまとまり。レア度ごとを先に並べて、同時にそろったときはシリーズまるごとの演出をあとに出す
 const completedSeries = st => [...RARITY_GROUPS.map(g => g.id), ...SERIES.map(s => s.id)].filter(id => seriesDone(st, id));
 // まだもらっていないコンプリートのごほうびを渡す。渡したシリーズを返す
+let treasureNews = false; // 宝箱シリーズが今解放された(演出を出す)
 function grantComplete(base) {
+  if (!base.treasureOpen && TREASURE_KEYS.filter(id => seriesDone(base, id)).length >= TREASURE_NEED) {
+    base.treasureOpen = true; treasureNews = true;
+  }
   base.completeRewards = base.completeRewards || [];
   const got = REWARD_SERIES.filter(id => !base.completeRewards.includes(id) && seriesDone(base, id));
   for (const id of got) { base.completeRewards.push(id); base.skillTickets = (base.skillTickets || 0) + 1; }
@@ -1743,6 +1754,7 @@ function grantComplete(base) {
 function celebrateComplete(before, rewarded) {
   const now = completedSeries(state);
   for (const id of now) if (!before.includes(id) || rewarded.includes(id)) celebrate({ kind: "complete", series: id, reward: rewarded.includes(id) });
+  if (treasureNews && state.treasureOpen) { treasureNews = false; celebrate({ kind: "unlock", series: "treasure" }); }
 }
 
 // 演出は順番に1つずつ。表紙・ガチャの演出・ほかのダイアログが終わってから出す
@@ -1759,6 +1771,14 @@ function playFx() {
       el("p", "fx-note", "「チケットで引く」で、好きなときにカードを引けます。"));
     flash("gold"); rain(["#ffd36b", "#fff3c4", "#ff9cc2", "#9fd0ff", "#ffffff"]);
     Sfx.play("fanfare"); Sfx.later(1000, "coin");
+  } else if (it.kind === "unlock") {
+    const s = seriesOf[it.series], img = el("img");
+    img.src = `cards/${s.back}.jpg`; img.alt = ""; img.style.setProperty("--k", 0);
+    const cards = el("div", "fx-cards"); cards.append(img);
+    const big = el("h2", "fx-big"); big.append("解放！", el("small", "", `${s.name}シリーズ`));
+    box.append(el("div", "fx-cap", "NEW SERIES"), big, cards, el("p", "fx-note", "ガチャから出るようになりました。図鑑で確かめてみましょう。"));
+    flash("gold"); rain(["#ffd36b", "#fff3c4", "#ff9cc2", "#9fd0ff", "#ffffff"]);
+    Sfx.play("fanfare");
   } else if (it.kind === "login") {
     const d = it.streak, from = Math.max(1, d - 6), days = el("div", "fx-days");
     for (let k = 0; k < 7; k++) {
@@ -1769,9 +1789,10 @@ function playFx() {
     }
     const big = el("h2", "fx-big"); big.append(`${d}日目！`, el("small", "", "連続ログイン"));
     box.append(el("div", "fx-cap", "LOGIN BONUS"), big, days);
-    if (it.n) box.append(el("div", "fx-gift", `ごほうび チケット+${it.n}枚`));
+    box.append(el("p", "fx-note", `累計ログイン ${it.days}日`));
+    if (it.n) box.append(el("div", "fx-gift", `ごほうび チケット+${it.n}枚` + (it.nt ? `（累計${it.days}日のごほうびをふくむ）` : "")));
     const nx = nextBonus(d);
-    box.append(el("p", "fx-note", `次のごほうび：${nx.day}日目にチケット+${nx.n}`));
+    box.append(el("p", "fx-note", `次のごほうび：連続${nx.day}日目にチケット+${nx.n} ・ 累計はあと${TOTAL_EVERY - it.days % TOTAL_EVERY}日でチケット+1`));
     if (it.n) { flash("gold"); rain(["#ffd36b", "#fff3c4", "#ff9cc2", "#ffffff"]); Sfx.later((Math.min(d, 7) * 0.12 + 0.5) * 1000, "coin"); }
   } else {
     const g = groupOf(it.series), s = seriesOf[g.s], cards = el("div", "fx-cards");
@@ -2187,17 +2208,23 @@ async function redeemInner() {
 }
 
 // 連続ログインのごほうび: 3日ごとに1枚、7日ごとに1枚、30日ごとに2枚(重なった日は合計)
+// 累計ログインのごほうび: 連続が途切れても、通算15日ごとにチケット1枚
+const TOTAL_EVERY = 15;
+const totalBonus = d => d > 0 && d % TOTAL_EVERY === 0 ? 1 : 0;
 function loginBonus(d) { return (d % 3 === 0 ? 1 : 0) + (d % 7 === 0 ? 1 : 0) + (d % 30 === 0 ? 2 : 0); }
 function nextBonus(d) { let k = d + 1; while (!loginBonus(k)) k++; return { day: k, n: loginBonus(k) }; }
 // その日はじめて開いたときに1回だけ数える(アカウントの記録を読み込んでから呼ぶ)
 function checkLogin() {
   if (state.lastLogin === today()) return render();
+  // 累計を数え始める前からの人は、今の連続ログイン日数から数える
+  if (state.loginDays == null) state.loginDays = state.lastLogin === yesterday() ? state.loginStreak || 0 : 0;
   state.loginStreak = state.lastLogin === yesterday() ? (state.loginStreak || 0) + 1 : 1;
+  state.loginDays += 1;
   state.lastLogin = today();
-  const n = loginBonus(state.loginStreak);
-  if (n) state.tickets = (state.tickets || 0) + n;
+  const n = loginBonus(state.loginStreak), nt = totalBonus(state.loginDays);
+  if (n + nt) state.tickets = (state.tickets || 0) + n + nt;
   save(); render();
-  celebrate({ kind: "login", streak: state.loginStreak, n });
+  celebrate({ kind: "login", streak: state.loginStreak, n: n + nt, days: state.loginDays, nt });
 }
 function toast(msg) {
   $("toast").textContent = msg; $("toast").hidden = false;
